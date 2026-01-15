@@ -1,0 +1,16 @@
+{
+  "name": "googlechat-client",
+  "version": "1.0.0",
+  "description": "Google Chat API client using OAuth and Dynamite token auth",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "auth": "node auth.js",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.6.0",
+    "open": "^9.1.0",
+    "protobufjs": "^7.2.6"
+  }
+}

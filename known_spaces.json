@@ -1,0 +1,352 @@
+[
+  {
+    "id": "AAAAHKvY2CQ",
+    "name": "R2 Gateway (Team-only)",
+    "type": "space"
+  },
+  {
+    "id": "AAAAfjaJvIQ",
+    "name": "London, UK Office | londonoffice@cloudflare.com",
+    "type": "space"
+  },
+  {
+    "id": "AAAAEL538nI",
+    "name": "Tunnel \u27f6 use https://wiki.cfdata.org/display/TEAM/questions/all",
+    "type": "space"
+  },
+  {
+    "id": "AAAABv0AX4M",
+    "name": "\ud83c\udf4a Orange Coded Memes for Highstating Machines",
+    "type": "space"
+  },
+  {
+    "id": "AAAAS5_61Qc",
+    "name": "Catflare \ud83d\udc08",
+    "type": "space"
+  },
+  {
+    "id": "AAAABYxeq6s",
+    "name": "Workers KV Launch Room",
+    "type": "space"
+  },
+  {
+    "id": "AAAA9pMbmJI",
+    "name": "Coding Assistant tools",
+    "type": "space"
+  },
+  {
+    "id": "AAAAKNT0yOM",
+    "name": "Workers Deploy & Config / EWC / Workers Core",
+    "type": "space"
+  },
+  {
+    "id": "AAAAvUqmCw8",
+    "name": "Public Policy",
+    "type": "space"
+  },
+  {
+    "id": "AAAAEk45rpQ",
+    "name": "Edge Storage",
+    "type": "space"
+  },
+  {
+    "id": "AAAAiMhIM3s",
+    "name": "MCP (Model Context Protocol) Servers/Agents on Cloudflare",
+    "type": "space"
+  },
+  {
+    "id": "AAAAAz2NJyM",
+    "name": "R2 + Trust & Safety",
+    "type": "space"
+  },
+  {
+    "id": "AAAAXqgBsU4",
+    "name": "Durable Objects - Public Channel",
+    "type": "space"
+  },
+  {
+    "id": "AAAA--tkdSI",
+    "name": "Terraform (internal) General - atlantis / butler / etc",
+    "type": "space"
+  },
+  {
+    "id": "AAAAUdh_23M",
+    "name": "CF1 Open -> Please post with SHELP Ticket link",
+    "type": "space"
+  },
+  {
+    "id": "AAAA4f4H5zE",
+    "name": "Trust & Safety Questions",
+    "type": "space"
+  },
+  {
+    "id": "AAAAeWn0VhU",
+    "name": "API & Zones Team - Public Channel (JIRA: APIOPS)",
+    "type": "space"
+  },
+  {
+    "id": "AAAAL9tcYSk",
+    "name": "R2 Releases",
+    "type": "space"
+  },
+  {
+    "id": "AAAATrcttBc",
+    "name": "Travel",
+    "type": "space"
+  },
+  {
+    "id": "AAAACs3eD9w",
+    "name": "Incident Announcements",
+    "type": "space"
+  },
+  {
+    "id": "AAAAcqj1nGY",
+    "name": "R2 Standups",
+    "type": "space"
+  },
+  {
+    "id": "AAAA64AasYk",
+    "name": "R2 Watercooler",
+    "type": "space"
+  },
+  {
+    "id": "AAAAgY1uPF8",
+    "name": "R2 + Stream (Team Only)",
+    "type": "space"
+  },
+  {
+    "id": "AAAA-v9ItSI",
+    "name": "Customer IAM (not IT, https://cflare.co/iam-support)",
+    "type": "space"
+  },
+  {
+    "id": "AAAAgE_w7mY",
+    "name": "Customer Escalations (for CUSTESC Jiras)",
+    "type": "space"
+  },
+  {
+    "id": "AAAAag8v2Oo",
+    "name": "Salt (devops/salt) State/pillar help: For MRs see https://backstage.cfdata.org/catalog/default/component/salt/docs/contributing/",
+    "type": "space"
+  },
+  {
+    "id": "AAAANOzB7qI",
+    "name": "Edge SRE & Net Open",
+    "type": "space"
+  },
+  {
+    "id": "AAAAaZOU2IE",
+    "name": "* CAT Public - Challenges and Turnstile",
+    "type": "space"
+  },
+  {
+    "id": "AAAAUXRht48",
+    "name": "Shortcut-MENTIONS",
+    "type": "space"
+  },
+  {
+    "id": "AAAA0OEKvq4",
+    "name": "DevTools",
+    "type": "space"
+  },
+  {
+    "id": "AAAA8Snzn3M",
+    "name": "R2 Ingress",
+    "type": "space"
+  },
+  {
+    "id": "AAAAbHbK_oI",
+    "name": "Dashboard Feedback/Issues",
+    "type": "space"
+  },
+  {
+    "id": "AAAA538Nyvk",
+    "name": "Stream Jira Events",
+    "type": "space"
+  },
+  {
+    "id": "AAAACRXHS50",
+    "name": "R2 Alerts [Staging]",
+    "type": "space"
+  },
+  {
+    "id": "AAAAOEf896I",
+    "name": "Agents - Realtime, Workers, DO, AI, Privacy....",
+    "type": "space"
+  },
+  {
+    "id": "AAAAX5Y09D4",
+    "name": "Quicksilver",
+    "type": "space"
+  },
+  {
+    "id": "AAAAK8ArgFY",
+    "name": "Vacation & Travel Tips",
+    "type": "space"
+  },
+  {
+    "id": "AAAA9jQLSmw",
+    "name": "\u2328\ufe0f keyboards",
+    "type": "space"
+  },
+  {
+    "id": "AAAA_hr4eKY",
+    "name": "Shortcut-STARRED",
+    "type": "space"
+  },
+  {
+    "id": "AAAAUBQo3Gw",
+    "name": "ETI Events - Preview Review + Hack Week + Quick Wins",
+    "type": "space"
+  },
+  {
+    "id": "AAAALxmhpCI",
+    "name": "Cache (use CUSTESC for customer issues/questions)",
+    "type": "space"
+  },
+  {
+    "id": "AAAAPCJJW4M",
+    "name": "Kubernetes",
+    "type": "space"
+  },
+  {
+    "id": "AAAAwB3hcA4",
+    "name": "London taxflare",
+    "type": "space"
+  },
+  {
+    "id": "AAAATjRc8dQ",
+    "name": "\ud83c\udfc3\u200d\u2640\ufe0f Running",
+    "type": "space"
+  },
+  {
+    "id": "AAAAU0ZhWVQ",
+    "name": "Edge Operations Collab",
+    "type": "space"
+  },
+  {
+    "id": "AAAAOyUnD_g",
+    "name": "Authoritative DNS \u2014 https://cflare.co/dns-chat",
+    "type": "space"
+  },
+  {
+    "id": "AAAAjdeSxJM",
+    "name": "R2 + NET (Team-Only)",
+    "type": "space"
+  },
+  {
+    "id": "AAAAPFUlLRQ",
+    "name": "Performance",
+    "type": "space"
+  },
+  {
+    "id": "AAAALa8snnM",
+    "name": "R2 Alerts [Production]",
+    "type": "space"
+  },
+  {
+    "id": "AAAAAzbdxGI",
+    "name": "Developer Platform (Team Only)",
+    "type": "space"
+  },
+  {
+    "id": "AAAADMOjlT0",
+    "name": "AskIT | Use Astra for General IT Support",
+    "type": "space"
+  },
+  {
+    "id": "AAAAhLHG6is",
+    "name": "FL",
+    "type": "space"
+  },
+  {
+    "id": "AAAAv5GI228",
+    "name": null,
+    "type": "space"
+  },
+  {
+    "id": "AAAAdQ2hqyc",
+    "name": "Gear/Petrol-heads \ud83d\ude97  \ud83c\udfcd\ufe0f\ud83d\udca8 \ud83c\udfc1",
+    "type": "space"
+  },
+  {
+    "id": "AAAAg_FqyU0",
+    "name": "R2 Metadata",
+    "type": "space"
+  },
+  {
+    "id": "AAAA77d9Wpo",
+    "name": "Austin Office | austinoffice@cloudflare.com",
+    "type": "space"
+  },
+  {
+    "id": "AAAAKe8ixtw",
+    "name": "Frontend / UI Development",
+    "type": "space"
+  },
+  {
+    "id": "AAAAX6p4LjA",
+    "name": "Enterprise-IAM (EIAM)",
+    "type": "space"
+  },
+  {
+    "id": "AAAAFr6NlTs",
+    "name": "R2 (Team-only)",
+    "type": "space"
+  },
+  {
+    "id": "AAAAJ00jt84",
+    "name": "R2 Storage - Public Channel",
+    "type": "space"
+  },
+  {
+    "id": "AAAAQ_hrZLI",
+    "name": "Developer Docs (cflare.co/docs)",
+    "type": "space"
+  },
+  {
+    "id": "AAAA4Yc6tEI",
+    "name": "Observability (Open) - Support on Jira (OBS) - Docs https://cflare.co/observability",
+    "type": "space"
+  },
+  {
+    "id": "AAAAGzDkHEY",
+    "name": "R2 CRC32 Support & SDK Acceptance Testing",
+    "type": "space"
+  },
+  {
+    "id": "AAAAHZIeaYM",
+    "name": "ClickHouse Users",
+    "type": "space"
+  },
+  {
+    "id": "AAAAzf7rN-U",
+    "name": "Edge Rules Engine (ERE): https://cflare.co/ere",
+    "type": "space"
+  },
+  {
+    "id": "AAAAMYrFFjk",
+    "name": "Data (Analytics, Alerts, Logs, Audit Logs, Data Pipeline)",
+    "type": "space"
+  },
+  {
+    "id": "AAAAwq6MoB4",
+    "name": "AI Search (formerly AutoRAG) (Public)",
+    "type": "space"
+  },
+  {
+    "id": "AAAAXKl8C34",
+    "name": "TSENG / HCP Team Collab",
+    "type": "space"
+  },
+  {
+    "id": "AAAAWFu1kqo",
+    "name": "Ryan's Test Space",
+    "type": "space"
+  },
+  {
+    "id": "AAAAjiO_-0Q",
+    "name": "Selfhosted",
+    "type": "space"
+  }
+]
