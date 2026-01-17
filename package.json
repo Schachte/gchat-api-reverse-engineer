@@ -1,16 +1,18 @@
 {
-  "name": "googlechat-client",
+  "name": "google-chat-api",
   "version": "1.0.0",
-  "description": "Google Chat API client using OAuth and Dynamite token auth",
-  "main": "index.js",
-  "type": "module",
+  "description": "Google Chat API client with UI, server, and documentation",
+  "private": true,
   "scripts": {
-    "auth": "node auth.js",
-    "start": "node index.js"
+    "dev": "npm run serve:watch --prefix packages/gchat",
+    "dev:server": "npm run serve:watch --prefix packages/gchat",
+    "dev:docs": "cd documentation && ./serve.sh",
+    "dev:all": "concurrently -n server,docs -c blue,green \"npm run dev:server\" \"npm run dev:docs\"",
+    "build": "npm run build --prefix packages/gchat",
+    "test": "npm test --prefix packages/gchat",
+    "serve": "npm run serve --prefix packages/gchat"
   },
-  "dependencies": {
-    "better-sqlite3": "^12.6.0",
-    "open": "^9.1.0",
-    "protobufjs": "^7.2.6"
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }

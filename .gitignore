@@ -1,6 +1,7 @@
 # Secrets & Credentials
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 *.secret
@@ -49,6 +50,8 @@ coverage/
 # IDE & Editors
 .idea/
 .vscode/
+.claude/
+.opencode/
 *.swp
 *.swo
 *~
@@ -70,3 +73,41 @@ tmp/
 temp/
 *.tmp
 *.temp
+
+# Legacy code (not maintained)
+legacy/
+maugclib/
+
+# Local scratch / dev artifacts (not part of the repo)
+ToRemove/
+browser/
+debugging/
+sample/
+spaces.json
+filtering.md
+info.md
+test.txt
+dev.sh
+deploy-remote.sh
+extract-cookies.mjs
+test-cookies.mjs
+yarn.lock
+
+# Project-specific auth/tokens (Google Chat API)
+tokens.json
+cached_auth.json
+cached_cookies.json
+gchat-state.json
+*.db
+
+# Local exports / large artifacts (keep out of git)
+packages/gchat/chats/
+packages/gchat/data/
+packages/gchat/workers*.json
+packages/gchat/alerts*.json
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo

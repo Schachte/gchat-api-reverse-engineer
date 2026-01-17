@@ -1,0 +1,2667 @@
+---
+openapi: 3.1.0
+info:
+  title: Google Chat API
+  version: 1.0.0
+  description: Unofficial JSON API for Google Chat using reverse-engineered endpoints.
+    The HTTP server wraps internal Google Chat APIs and authenticates using cookies
+    from chat.google.com.
+servers:
+- url: http://localhost:3000
+  description: Local development server
+tags:
+- name: System
+  description: Server metadata and health endpoints.
+- name: Spaces
+  description: Spaces (rooms) and space-level operations.
+- name: Threads
+  description: Thread retrieval and replies.
+- name: Messages
+  description: Message creation and bulk message retrieval.
+- name: Notifications
+  description: World items and unread notifications.
+- name: Unreads
+  description: Categorized unread counts for the UI.
+- name: Search
+  description: Search and discovery endpoints.
+- name: Direct Messages
+  description: DM listing and message retrieval.
+- name: Presence
+  description: User presence status lookups.
+- name: Attachments
+  description: Attachment resolution and proxying.
+paths:
+  "/":
+    get:
+      summary: API metadata
+      description: Returns basic metadata and a list of available endpoints.
+      operationId: getApiInfo
+      tags:
+      - System
+      responses:
+        '200':
+          description: API metadata
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ApiInfo"
+  "/health":
+    get:
+      summary: Health check
+      description: Returns server health status.
+      operationId: getHealth
+      tags:
+      - System
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/HealthResponse"
+  "/openapi.json":
+    get:
+      summary: OpenAPI document (JSON)
+      description: Returns the OpenAPI specification used by the docs UI.
+      operationId: getOpenApiJson
+      tags:
+      - System
+      responses:
+        '200':
+          description: OpenAPI document
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/OpenApiDocument"
+  "/openapi.yaml":
+    get:
+      summary: OpenAPI document (YAML)
+      description: Returns the OpenAPI specification in YAML form.
+      operationId: getOpenApiYaml
+      tags:
+      - System
+      responses:
+        '200':
+          description: OpenAPI YAML document
+          content:
+            text/yaml:
+              schema:
+                type: string
+  "/api/spaces":
+    get:
+      summary: List spaces
+      description: |
+        Returns spaces and DMs with cursor-based pagination.
+        Includes additional metadata (emoji, rosterId) by default. Use enrich=false to disable.
+      operationId: listSpaces
+      tags:
+      - Spaces
+      parameters:
+      - name: pageSize
+        in: query
+        description: Number of spaces to return per page (default 100).
+        schema:
+          type: integer
+          minimum: 1
+          default: 100
+      - name: cursor
+        in: query
+        description: Pagination cursor (sortTimestamp in microseconds).
+        schema:
+          type: integer
+          format: int64
+      - name: enrich
+        in: query
+        description: |
+          Extracts additional metadata from the space data including emoji (unicode) and rosterId.
+          Enabled by default. Set to false to disable enrichment for faster responses.
+          This data is parsed from the same API response, so no additional authentication is required.
+        schema:
+          type: boolean
+          default: true
+      responses:
+        '200':
+          description: List of spaces and DMs
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SpacesResponse"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/whoami":
+    get:
+      summary: Current user
+      description: Returns profile information for the authenticated user.
+      operationId: getCurrentUser
+      tags:
+      - Spaces
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SelfUser"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/spaces/{spaceId}/messages":
+    get:
+      summary: List messages in a space
+      description: |
+        Returns messages for a space with cursor-based pagination and optional time filtering.
+        By default returns a flat list of first messages (one per topic). Use format=threaded
+        to get topics with nested replies. Also supports maxPages parameter for multi-page fetch.
+      operationId: listSpaceMessages
+      tags:
+      - Messages
+      parameters:
+      - name: spaceId
+        in: path
+        required: true
+        description: Space identifier.
+        schema:
+          type: string
+      - name: pageSize
+        in: query
+        description: Number of messages to return per page (default 25).
+        schema:
+          type: integer
+          minimum: 1
+          default: 25
+      - name: cursor
+        in: query
+        description: Pagination cursor (microseconds) from a previous response.
+        schema:
+          type: integer
+          format: int64
+      - name: until
+        in: query
+        description: Upper time boundary (epoch seconds, epoch microseconds, or ISO 8601).
+        schema:
+          oneOf:
+          - type: integer
+            format: int64
+          - type: string
+            format: date-time
+      - name: since
+        in: query
+        description: Lower time boundary (epoch seconds, epoch microseconds, or ISO 8601).
+        schema:
+          oneOf:
+          - type: integer
+            format: int64
+          - type: string
+            format: date-time
+      - name: full
+        in: query
+        description: Fetch full thread contents for every topic (only applies when format=threaded).
+        schema:
+          type: boolean
+          default: false
+      - name: format
+        in: query
+        description: |
+          Response format. 'messages' (default) returns a flat list of first messages only.
+          'threaded' returns topics with nested replies.
+        schema:
+          type: string
+          enum:
+          - messages
+          - threaded
+          default: messages
+      - name: maxPages
+        in: query
+        description: |
+          When specified, fetches multiple pages and aggregates results.
+          Returns AllMessagesResult instead of ThreadsResult.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Messages (flat list or threaded based on format parameter)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - "$ref": "#/components/schemas/ThreadsResult"
+                - "$ref": "#/components/schemas/AllMessagesResult"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+    post:
+      summary: Send a message
+      description: Sends a new message to a space (creates a new thread).
+      operationId: sendMessage
+      tags:
+      - Messages
+      parameters:
+      - name: spaceId
+        in: path
+        required: true
+        description: Space identifier.
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/SendMessageRequest"
+      responses:
+        '200':
+          description: Send message result
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SendMessageResult"
+        '400':
+          description: Invalid JSON body or missing text
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SendMessageResult"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SendMessageResult"
+  "/api/spaces/{spaceId}/threads":
+    get:
+      summary: List threads in a space (alias)
+      description: |
+        Alias for /api/spaces/{spaceId}/messages. Returns messages for a space with
+        cursor-based pagination. Use /messages endpoint for new integrations.
+      operationId: listSpaceThreads
+      tags:
+      - Threads
+      parameters:
+      - name: spaceId
+        in: path
+        required: true
+        description: Space identifier.
+        schema:
+          type: string
+      - name: pageSize
+        in: query
+        description: Number of messages to return (default 25).
+        schema:
+          type: integer
+          minimum: 1
+          default: 25
+      - name: cursor
+        in: query
+        description: Pagination cursor (microseconds) from a previous response.
+        schema:
+          type: integer
+          format: int64
+      - name: until
+        in: query
+        description: Upper time boundary (epoch seconds, epoch microseconds, or ISO 8601).
+        schema:
+          oneOf:
+          - type: integer
+            format: int64
+          - type: string
+            format: date-time
+      - name: since
+        in: query
+        description: Lower time boundary (epoch seconds, epoch microseconds, or ISO 8601).
+        schema:
+          oneOf:
+          - type: integer
+            format: int64
+          - type: string
+            format: date-time
+      - name: full
+        in: query
+        description: Fetch full thread contents for every topic.
+        schema:
+          type: boolean
+          default: false
+      - name: format
+        in: query
+        description: |
+          Response format. 'messages' (default) returns a flat list of first messages only.
+          'threaded' returns topics with nested replies.
+        schema:
+          type: string
+          enum:
+          - messages
+          - threaded
+          default: messages
+      responses:
+        '200':
+          description: Messages (flat list or threaded based on format parameter)
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ThreadsResult"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/spaces/{spaceId}/threads/{topicId}":
+    get:
+      summary: Get a single thread
+      description: Returns all messages for a specific thread in a space.
+      operationId: getSpaceThread
+      tags:
+      - Threads
+      parameters:
+      - name: spaceId
+        in: path
+        required: true
+        description: Space identifier.
+        schema:
+          type: string
+      - name: topicId
+        in: path
+        required: true
+        description: Topic identifier.
+        schema:
+          type: string
+      - name: pageSize
+        in: query
+        description: Maximum messages to return (default 100).
+        schema:
+          type: integer
+          minimum: 1
+          default: 100
+      responses:
+        '200':
+          description: Thread messages
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ThreadResult"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/spaces/{spaceId}/threads/{topicId}/replies":
+    post:
+      summary: Reply to a thread
+      description: Posts a reply message to an existing thread.
+      operationId: replyToThread
+      tags:
+      - Threads
+      parameters:
+      - name: spaceId
+        in: path
+        required: true
+        description: Space identifier.
+        schema:
+          type: string
+      - name: topicId
+        in: path
+        required: true
+        description: Topic identifier.
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/SendMessageRequest"
+      responses:
+        '200':
+          description: Reply result
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SendMessageResult"
+        '400':
+          description: Invalid JSON body or missing text
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SendMessageResult"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SendMessageResult"
+
+  "/api/notifications":
+    get:
+      summary: List notifications
+      description: Returns world items and optional message previews filtered by notification
+        type.
+      operationId: getNotifications
+      tags:
+      - Notifications
+      parameters:
+      - name: mentions
+        in: query
+        description: Include direct mention notifications.
+        schema:
+          type: boolean
+          default: false
+      - name: threads
+        in: query
+        description: Include subscribed thread notifications.
+        schema:
+          type: boolean
+          default: false
+      - name: spaces
+        in: query
+        description: Include subscribed space notifications.
+        schema:
+          type: boolean
+          default: false
+      - name: dms
+        in: query
+        description: Include direct message notifications.
+        schema:
+          type: boolean
+          default: false
+      - name: read
+        in: query
+        description: Include read (notificationCategory=none) items.
+        schema:
+          type: boolean
+          default: false
+      - name: me
+        in: query
+        description: Filter to spaces with direct @you mentions.
+        schema:
+          type: boolean
+          default: false
+      - name: atAll
+        in: query
+        description: Filter to spaces with @all mentions.
+        schema:
+          type: boolean
+          default: false
+      - name: at-all
+        in: query
+        description: Alias for atAll.
+        schema:
+          type: boolean
+          default: false
+      - name: space
+        in: query
+        description: Filter to a specific space or DM ID.
+        schema:
+          type: string
+      - name: messages
+        in: query
+        description: Include message previews per space.
+        schema:
+          type: boolean
+          default: false
+      - name: limit
+        in: query
+        description: Limit the number of items returned (0 means no limit).
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - name: offset
+        in: query
+        description: Offset into the results for pagination.
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - name: parallel
+        in: query
+        description: Parallel fetch limit when messages are requested.
+        schema:
+          type: integer
+          minimum: 1
+          default: 5
+      - name: messagesLimit
+        in: query
+        description: Messages per space when messages are requested (default 3).
+        schema:
+          type: integer
+          minimum: 1
+          default: 3
+      - name: messages-limit
+        in: query
+        description: Alias for messagesLimit.
+        schema:
+          type: integer
+          minimum: 1
+          default: 3
+      responses:
+        '200':
+          description: Notification items and message previews
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/NotificationsResponse"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/unreads":
+    get:
+      summary: Get categorized unreads
+      description: Returns unread notifications grouped for sidebar usage.
+      operationId: getUnreads
+      tags:
+      - Unreads
+      parameters:
+      - name: fetchMessages
+        in: query
+        description: Fetch message content to determine mention types.
+        schema:
+          type: boolean
+          default: true
+      - name: messagesPerSpace
+        in: query
+        description: Messages per space for mention detection (default 5).
+        schema:
+          type: integer
+          minimum: 1
+          default: 5
+      - name: messages-per-space
+        in: query
+        description: Alias for messagesPerSpace.
+        schema:
+          type: integer
+          minimum: 1
+          default: 5
+      - name: checkParticipation
+        in: query
+        description: Check whether the user participated in each thread.
+        schema:
+          type: boolean
+          default: false
+      - name: check-participation
+        in: query
+        description: Alias for checkParticipation.
+        schema:
+          type: boolean
+          default: false
+      - name: parallel
+        in: query
+        description: Parallel fetch limit (default 5).
+        schema:
+          type: integer
+          minimum: 1
+          default: 5
+      - name: refresh
+        in: query
+        description: Force refresh the cached world state.
+        schema:
+          type: boolean
+          default: false
+      responses:
+        '200':
+          description: Unread sections and badge counts
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/UnreadsResponse"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/unreads/refresh":
+    get:
+      summary: Refresh unread counts
+      description: Forces a refresh of world items and returns summary counts.
+      operationId: refreshUnreads
+      tags:
+      - Unreads
+      responses:
+        '200':
+          description: Unread summary
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/UnreadsRefreshResponse"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/mark-read/{groupId}":
+    post:
+      summary: Mark space or DM as read
+      description: Marks a space or DM as read using the batchexecute flow with protobuf
+        fallback.
+      operationId: markRead
+      tags:
+      - Notifications
+      parameters:
+      - name: groupId
+        in: path
+        required: true
+        description: Space or DM identifier.
+        schema:
+          type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/MarkReadRequest"
+      responses:
+        '200':
+          description: Mark read result
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/MarkGroupReadstateResult"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/MarkGroupReadstateResult"
+  "/api/search":
+    get:
+      summary: Search messages
+      description: Searches messages across all spaces or a specific space.
+      operationId: searchMessages
+      tags:
+      - Search
+      parameters:
+      - name: q
+        in: query
+        required: true
+        description: Search query string.
+        schema:
+          type: string
+      - name: space
+        in: query
+        description: Optional space ID to scope search.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Search matches
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SearchResponse"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/find-spaces":
+    get:
+      summary: Find spaces
+      description: Finds spaces whose names match a query string.
+      operationId: findSpaces
+      tags:
+      - Search
+      parameters:
+      - name: q
+        in: query
+        required: true
+        description: Search query string.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Matching spaces
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/FindSpacesResponse"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/dms":
+    get:
+      summary: List direct messages
+      description: Returns DM conversations with optional message previews.
+      operationId: listDms
+      tags:
+      - Direct Messages
+      parameters:
+      - name: limit
+        in: query
+        description: Maximum DMs to return (default 50).
+        schema:
+          type: integer
+          minimum: 0
+          default: 50
+      - name: offset
+        in: query
+        description: Offset into the DM list (default 0).
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - name: messagesLimit
+        in: query
+        description: Messages per DM when messages=true (default 10).
+        schema:
+          type: integer
+          minimum: 1
+          default: 10
+      - name: messages-limit
+        in: query
+        description: Alias for messagesLimit.
+        schema:
+          type: integer
+          minimum: 1
+          default: 10
+      - name: parallel
+        in: query
+        description: Parallel fetch limit when messages are requested (default 5).
+        schema:
+          type: integer
+          minimum: 1
+          default: 5
+      - name: unread
+        in: query
+        description: Only include DMs with unread messages.
+        schema:
+          type: boolean
+          default: false
+      - name: messages
+        in: query
+        description: Include message previews for each DM.
+        schema:
+          type: boolean
+          default: false
+      - name: refresh
+        in: query
+        description: Force refresh cached world state.
+        schema:
+          type: boolean
+          default: false
+      responses:
+        '200':
+          description: Direct message list
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/DmsResponse"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/dms/presence":
+    get:
+      summary: Get DM presence
+      description: Looks up presence for DM participants, including profile info when
+        available.
+      operationId: getDmPresence
+      tags:
+      - Direct Messages
+      - Presence
+      parameters:
+      - name: dmIds
+        in: query
+        description: Comma-separated list of DM IDs.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Presence results mapped to DM IDs
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/DmPresenceResponse"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/dms/{dmId}":
+    get:
+      summary: Get DM info
+      description: Returns summary information for a DM.
+      operationId: getDmInfo
+      tags:
+      - Direct Messages
+      parameters:
+      - name: dmId
+        in: path
+        required: true
+        description: DM identifier.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: DM summary
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/DmConversation"
+        '404':
+          description: DM not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/dms/{dmId}/messages":
+    get:
+      summary: List DM messages
+      description: |
+        Returns messages for a direct message with cursor-based pagination and optional time filtering.
+        By default returns a flat list of first messages (one per topic). Use format=threaded
+        to get topics with nested replies.
+      operationId: getDmMessages
+      tags:
+      - Direct Messages
+      - Messages
+      parameters:
+      - name: dmId
+        in: path
+        required: true
+        description: DM identifier.
+        schema:
+          type: string
+      - name: pageSize
+        in: query
+        description: Messages per page (default 25).
+        schema:
+          type: integer
+          minimum: 1
+          default: 25
+      - name: repliesPerTopic
+        in: query
+        description: Replies per thread when format=threaded (default 10).
+        schema:
+          type: integer
+          minimum: 1
+          default: 10
+      - name: cursor
+        in: query
+        description: Pagination cursor (microseconds) from a previous response.
+        schema:
+          type: integer
+          format: int64
+      - name: until
+        in: query
+        description: Upper time boundary (epoch seconds, epoch microseconds, or ISO 8601).
+        schema:
+          oneOf:
+          - type: integer
+            format: int64
+          - type: string
+            format: date-time
+      - name: since
+        in: query
+        description: Lower time boundary (epoch seconds, epoch microseconds, or ISO 8601).
+        schema:
+          oneOf:
+          - type: integer
+            format: int64
+          - type: string
+            format: date-time
+      - name: fullThreads
+        in: query
+        description: Fetch full thread contents for each topic (only applies when format=threaded).
+        schema:
+          type: boolean
+          default: false
+      - name: format
+        in: query
+        description: |
+          Response format. 'messages' (default) returns a flat list of first messages only.
+          'threaded' returns topics with nested replies.
+        schema:
+          type: string
+          enum:
+          - messages
+          - threaded
+          default: messages
+      responses:
+        '200':
+          description: DM messages (flat list or threaded based on format parameter)
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/DmThreadsResult"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+    post:
+      summary: Send DM message
+      description: Sends a new message to a DM.
+      operationId: sendDmMessage
+      tags:
+      - Direct Messages
+      - Messages
+      parameters:
+      - name: dmId
+        in: path
+        required: true
+        description: DM identifier.
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/SendMessageRequest"
+      responses:
+        '200':
+          description: Send message result
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SendMessageResult"
+        '400':
+          description: Invalid JSON body or missing text
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SendMessageResult"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SendMessageResult"
+  "/api/dms/{dmId}/threads":
+    get:
+      summary: List DM threads (alias)
+      description: |
+        Alias for /api/dms/{dmId}/messages. Returns messages for a DM with cursor-based pagination.
+        Use /messages endpoint for new integrations.
+      operationId: getDmThreads
+      tags:
+      - Direct Messages
+      - Threads
+      parameters:
+      - name: dmId
+        in: path
+        required: true
+        description: DM identifier.
+        schema:
+          type: string
+      - name: pageSize
+        in: query
+        description: Messages per page (default 25).
+        schema:
+          type: integer
+          minimum: 1
+          default: 25
+      - name: repliesPerTopic
+        in: query
+        description: Replies per thread when format=threaded (default 10).
+        schema:
+          type: integer
+          minimum: 1
+          default: 10
+      - name: cursor
+        in: query
+        description: Pagination cursor (microseconds) from a previous response.
+        schema:
+          type: integer
+          format: int64
+      - name: until
+        in: query
+        description: Upper time boundary (epoch seconds, epoch microseconds, or ISO 8601).
+        schema:
+          oneOf:
+          - type: integer
+            format: int64
+          - type: string
+            format: date-time
+      - name: since
+        in: query
+        description: Lower time boundary (epoch seconds, epoch microseconds, or ISO 8601).
+        schema:
+          oneOf:
+          - type: integer
+            format: int64
+          - type: string
+            format: date-time
+      - name: fullThreads
+        in: query
+        description: Fetch full thread contents for each topic.
+        schema:
+          type: boolean
+          default: false
+      - name: format
+        in: query
+        description: |
+          Response format. 'messages' (default) returns a flat list of first messages only.
+          'threaded' returns topics with nested replies.
+        schema:
+          type: string
+          enum:
+          - messages
+          - threaded
+          default: messages
+      responses:
+        '200':
+          description: DM messages
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/DmThreadsResult"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/dms/{dmId}/topics":
+    get:
+      summary: List DM topics (alias)
+      description: Alias for /api/dms/{dmId}/messages. Use /messages endpoint for new integrations.
+      operationId: getDmTopics
+      tags:
+      - Direct Messages
+      - Threads
+      parameters:
+      - name: dmId
+        in: path
+        required: true
+        description: DM identifier.
+        schema:
+          type: string
+      - name: pageSize
+        in: query
+        description: Messages per page (default 25).
+        schema:
+          type: integer
+          minimum: 1
+          default: 25
+      - name: repliesPerTopic
+        in: query
+        description: Replies per thread when format=threaded (default 10).
+        schema:
+          type: integer
+          minimum: 1
+          default: 10
+      - name: cursor
+        in: query
+        description: Pagination cursor (microseconds) from a previous response.
+        schema:
+          type: integer
+          format: int64
+      - name: until
+        in: query
+        description: Upper time boundary (epoch seconds, epoch microseconds, or ISO
+          8601).
+        schema:
+          oneOf:
+          - type: integer
+            format: int64
+          - type: string
+            format: date-time
+      - name: since
+        in: query
+        description: Lower time boundary (epoch seconds, epoch microseconds, or ISO
+          8601).
+        schema:
+          oneOf:
+          - type: integer
+            format: int64
+          - type: string
+            format: date-time
+      - name: fullThreads
+        in: query
+        description: Fetch full thread contents for each topic.
+        schema:
+          type: boolean
+          default: false
+      - name: format
+        in: query
+        description: |
+          Response format. 'messages' (default) returns a flat list of first messages only.
+          'threaded' returns topics with nested replies.
+        schema:
+          type: string
+          enum:
+          - messages
+          - threaded
+          default: messages
+      responses:
+        '200':
+          description: DM messages
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/DmThreadsResult"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/dms/{dmId}/threads/{topicId}":
+    get:
+      summary: Get DM thread
+      description: Returns all messages for a DM thread.
+      operationId: getDmThread
+      tags:
+      - Direct Messages
+      - Threads
+      parameters:
+      - name: dmId
+        in: path
+        required: true
+        description: DM identifier.
+        schema:
+          type: string
+      - name: topicId
+        in: path
+        required: true
+        description: Topic identifier.
+        schema:
+          type: string
+      - name: pageSize
+        in: query
+        description: Maximum messages to return (default 100).
+        schema:
+          type: integer
+          minimum: 1
+          default: 100
+      responses:
+        '200':
+          description: Thread messages
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ThreadResult"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/presence":
+    get:
+      summary: Get user presence
+      description: Returns presence status for a list of user IDs, with optional profile
+        enrichment or raw debug output.
+      operationId: getPresence
+      tags:
+      - Presence
+      parameters:
+      - name: userIds
+        in: query
+        required: true
+        description: Comma-separated list of user IDs (max 100).
+        schema:
+          type: string
+      - name: include
+        in: query
+        description: Include profile info when set to 'profile'.
+        schema:
+          type: string
+          enum:
+          - profile
+      - name: debug
+        in: query
+        description: Return raw API response alongside parsed data.
+        schema:
+          type: boolean
+          default: false
+      responses:
+        '200':
+          description: Presence results
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - "$ref": "#/components/schemas/UserPresenceResult"
+                - "$ref": "#/components/schemas/UserPresenceWithProfileResult"
+                - "$ref": "#/components/schemas/UserPresenceRawResponse"
+        '400':
+          description: Missing or invalid userIds
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/presence/{userId}":
+    get:
+      summary: Get single user presence
+      description: Returns presence status for a single user.
+      operationId: getSinglePresence
+      tags:
+      - Presence
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        description: User identifier.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Presence
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/UserPresence"
+        '404':
+          description: Presence not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/attachment":
+    get:
+      summary: Resolve attachment
+      description: Resolves an attachment token to a signed URL and proxies the file
+        contents.
+      operationId: getAttachment
+      tags:
+      - Attachments
+      parameters:
+      - name: token
+        in: query
+        required: true
+        description: Attachment token from message metadata.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Attachment binary content
+          content:
+            application/octet-stream:
+              schema:
+                "$ref": "#/components/schemas/BinaryPayload"
+        '404':
+          description: Attachment not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '500':
+          description: Proxy error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+  "/api/proxy":
+    get:
+      summary: Proxy authenticated URL
+      description: Proxies a Google-hosted URL using authentication cookies.
+      operationId: proxyUrl
+      tags:
+      - Attachments
+      parameters:
+      - name: url
+        in: query
+        required: true
+        description: Target URL (must be a Google domain).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Proxied binary content
+          content:
+            application/octet-stream:
+              schema:
+                "$ref": "#/components/schemas/BinaryPayload"
+        '403':
+          description: Blocked domain
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+        '500':
+          description: Proxy error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    OpenApiDocument:
+      type: object
+      description: Raw OpenAPI document served by /openapi.json.
+      additionalProperties: true
+    BinaryPayload:
+      type: string
+      format: binary
+      description: Binary payload returned by proxy endpoints.
+    ApiInfo:
+      type: object
+      description: Metadata about the running API server.
+      properties:
+        name:
+          type: string
+          description: Service name.
+        version:
+          type: string
+          description: Server version string.
+        docs:
+          type: string
+          description: Path to the API reference UI.
+        ui:
+          type: string
+          description: Path to the experimental chat UI.
+        endpoints:
+          type: array
+          description: Human-readable list of available routes.
+          items:
+            type: string
+      required:
+      - name
+      - version
+      - docs
+      - ui
+      - endpoints
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Health status string.
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+          description: Server timestamp.
+      required:
+      - status
+      - timestamp
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message.
+      required:
+      - error
+    SpaceEmoji:
+      type: object
+      description: Emoji associated with a space (from People API enrichment).
+      properties:
+        unicode:
+          type: string
+          description: Unicode emoji character (e.g., "🚨").
+        imageUrl:
+          type: string
+          description: URL to the emoji image (e.g., from fonts.gstatic.com).
+    Space:
+      type: object
+      description: Space or DM summary.
+      properties:
+        id:
+          type: string
+          description: Space or DM identifier.
+        name:
+          type: string
+          description: Display name, if available.
+        type:
+          type: string
+          enum:
+          - space
+          - dm
+          description: Conversation type.
+        sortTimestamp:
+          type: integer
+          format: int64
+          description: Microsecond timestamp used for pagination.
+        emoji:
+          "$ref": "#/components/schemas/SpaceEmoji"
+        rosterId:
+          type: string
+          description: |
+            Roster ID for the space (only when enrich=true).
+            Example: "hangouts-chat-xxx@cloudflare.com"
+      required:
+      - id
+      - type
+    SpacesResponse:
+      type: object
+      properties:
+        spaces:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Space"
+        count:
+          type: integer
+          description: Total number of spaces returned.
+        pagination:
+          "$ref": "#/components/schemas/SpacesPagination"
+      required:
+      - spaces
+      - count
+      - pagination
+    SpacesPagination:
+      type: object
+      description: Pagination metadata for space listings.
+      properties:
+        hasMore:
+          type: boolean
+          description: True if more spaces are available.
+        nextCursor:
+          type: integer
+          format: int64
+          description: Cursor for the next page (sortTimestamp in microseconds).
+      required:
+      - hasMore
+    SelfUser:
+      type: object
+      description: Authenticated user profile.
+      properties:
+        userId:
+          type: string
+          description: User ID.
+        name:
+          type: string
+          description: Full display name.
+        email:
+          type: string
+          description: Primary email address.
+        firstName:
+          type: string
+          description: First name.
+        lastName:
+          type: string
+          description: Last name.
+        avatarUrl:
+          type: string
+          description: Avatar image URL.
+      required:
+      - userId
+    SendMessageRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          description: Message text.
+      required:
+      - text
+    SendMessageResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Whether the message send succeeded.
+        message_id:
+          type: string
+          description: Message ID when successful.
+        topic_id:
+          type: string
+          description: Topic ID when successful.
+        error:
+          type: string
+          description: Error message when unsuccessful.
+      required:
+      - success
+    MarkReadRequest:
+      type: object
+      description: Optional payload for marking a space or DM as read.
+      properties:
+        unreadCount:
+          type: integer
+          description: Unread count to acknowledge (optional).
+    MarkGroupReadstateResult:
+      type: object
+      description: Result of marking a space or DM as read.
+      properties:
+        success:
+          type: boolean
+          description: Whether the operation succeeded.
+        groupId:
+          type: string
+          description: Space or DM identifier.
+        lastReadTime:
+          type: integer
+          format: int64
+          description: Last read timestamp in microseconds.
+        unreadMessageCount:
+          type: integer
+          description: Remaining unread count if provided by the API.
+        error:
+          type: string
+          description: Error message when unsuccessful.
+      required:
+      - success
+      - groupId
+    UserMention:
+      type: object
+      description: Mention metadata extracted from message annotations.
+      properties:
+        user_id:
+          type: string
+          description: User ID mentioned.
+        display_name:
+          type: string
+          description: Display name for the mention.
+        mention_type:
+          type: string
+          enum:
+          - user
+          - bot
+          - all
+          description: Type of mention.
+      required:
+      - user_id
+      - mention_type
+    UrlMetadata:
+      type: object
+      description: URL metadata extracted from a message.
+      properties:
+        url:
+          type: string
+          description: Detected URL.
+        title:
+          type: string
+          description: Title or preview text.
+        image_url:
+          type: string
+          description: Preview image URL.
+        mime_type:
+          type: string
+          description: Detected MIME type.
+      required:
+      - url
+    FormatMetadata:
+      type: object
+      description: Formatting metadata for a message segment.
+      properties:
+        format_type:
+          type: string
+          enum:
+          - bold
+          - italic
+          - strikethrough
+          - monospace
+          description: Formatting style.
+      required:
+      - format_type
+    ImageMetadata:
+      type: object
+      description: Inline image metadata.
+      properties:
+        image_url:
+          type: string
+          description: Image URL.
+        width:
+          type: integer
+          description: Image width in pixels.
+        height:
+          type: integer
+          description: Image height in pixels.
+        alt_text:
+          type: string
+          description: Alt text for the image.
+        content_type:
+          type: string
+          description: Image MIME type.
+      required:
+      - image_url
+    AttachmentMetadata:
+      type: object
+      description: File attachment metadata.
+      properties:
+        attachment_id:
+          type: string
+          description: Attachment token ID.
+        content_name:
+          type: string
+          description: Original file name.
+        content_type:
+          type: string
+          description: Attachment MIME type.
+        content_size:
+          type: integer
+          description: Attachment size in bytes.
+        download_url:
+          type: string
+          description: Signed download URL (if resolved).
+        thumbnail_url:
+          type: string
+          description: Thumbnail preview URL.
+    Annotation:
+      type: object
+      description: Annotation extracted from message payload.
+      properties:
+        type:
+          type: integer
+          enum:
+          - 0
+          - 1
+          - 2
+          - 3
+          - 4
+          - 6
+          - 9
+          - 10
+          - 11
+          - 13
+          description: Annotation type enum from Google Chat.
+        start_index:
+          type: integer
+          description: Start index of the annotation in the message text.
+        length:
+          type: integer
+          description: Length of the annotation span.
+        user_mention:
+          "$ref": "#/components/schemas/UserMention"
+        url_metadata:
+          "$ref": "#/components/schemas/UrlMetadata"
+        format_metadata:
+          "$ref": "#/components/schemas/FormatMetadata"
+        image_metadata:
+          "$ref": "#/components/schemas/ImageMetadata"
+        attachment_metadata:
+          "$ref": "#/components/schemas/AttachmentMetadata"
+      required:
+      - type
+      - start_index
+      - length
+    Message:
+      type: object
+      description: Message object returned by the API.
+      properties:
+        message_id:
+          type: string
+          description: Message identifier.
+        topic_id:
+          type: string
+          description: Topic identifier.
+        space_id:
+          type: string
+          description: Space identifier.
+        text:
+          type: string
+          description: Message text.
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO timestamp derived from timestamp_usec.
+        timestamp_usec:
+          type: integer
+          format: int64
+          description: Message timestamp in microseconds.
+        sender:
+          type: string
+          description: Sender display name.
+        sender_id:
+          type: string
+          description: Sender user ID.
+        is_thread_reply:
+          type: boolean
+          description: True if this message is a reply within a thread.
+        reply_index:
+          type: integer
+          description: Index within the thread if a reply.
+        annotations:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Annotation"
+        mentions:
+          type: array
+          items:
+            "$ref": "#/components/schemas/UserMention"
+        has_mention:
+          type: boolean
+          description: True if the message includes any mentions.
+        images:
+          type: array
+          items:
+            "$ref": "#/components/schemas/ImageMetadata"
+        attachments:
+          type: array
+          items:
+            "$ref": "#/components/schemas/AttachmentMetadata"
+        urls:
+          type: array
+          items:
+            "$ref": "#/components/schemas/UrlMetadata"
+      required:
+      - text
+    Topic:
+      type: object
+      description: Thread/topic summary with replies.
+      properties:
+        topic_id:
+          type: string
+          description: Topic identifier.
+        space_id:
+          type: string
+          description: Space identifier.
+        sort_time:
+          type: integer
+          format: int64
+          description: Topic sort timestamp in microseconds.
+        message_count:
+          type: integer
+          description: Number of replies loaded for the topic.
+        has_more_replies:
+          type: boolean
+          description: True if the topic likely has more replies than loaded.
+        replies:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Message"
+      required:
+      - topic_id
+      - space_id
+      - message_count
+      - replies
+    PaginationInfo:
+      type: object
+      description: Pagination metadata for thread listings.
+      properties:
+        contains_first_topic:
+          type: boolean
+          description: True if the first topic in the space is included.
+        contains_last_topic:
+          type: boolean
+          description: True if the most recent topic is included.
+        has_more:
+          type: boolean
+          description: True if there are more topics available.
+        next_cursor:
+          type: integer
+          format: int64
+          description: Cursor value for fetching the next page.
+      required:
+      - contains_first_topic
+      - contains_last_topic
+      - has_more
+    ThreadsResult:
+      type: object
+      description: Thread listing response. When format=messages, topics is empty
+        and messages contains the first message of each topic.
+      properties:
+        messages:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Message"
+        topics:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Topic"
+        pagination:
+          "$ref": "#/components/schemas/PaginationInfo"
+        total_topics:
+          type: integer
+          description: Total number of topics returned.
+        total_messages:
+          type: integer
+          description: Total number of messages returned.
+      required:
+      - messages
+      - topics
+      - pagination
+      - total_topics
+      - total_messages
+    ThreadResult:
+      type: object
+      description: Single thread response.
+      properties:
+        messages:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Message"
+        topic_id:
+          type: string
+          description: Topic identifier.
+        space_id:
+          type: string
+          description: Space identifier.
+        total_messages:
+          type: integer
+          description: Total messages in the thread.
+      required:
+      - messages
+      - topic_id
+      - space_id
+      - total_messages
+    AllMessagesResult:
+      type: object
+      description: Aggregated messages across multiple pages.
+      properties:
+        messages:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Message"
+        topics:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Topic"
+        pages_loaded:
+          type: integer
+          description: Number of pages fetched.
+        has_more:
+          type: boolean
+          description: True if more pages were available.
+      required:
+      - messages
+      - topics
+      - pages_loaded
+      - has_more
+    SearchMatch:
+      allOf:
+      - "$ref": "#/components/schemas/Message"
+      - type: object
+        properties:
+          space_name:
+            type: string
+            description: Name of the matched space (when searching all spaces).
+          snippet:
+            type: string
+            description: Short snippet around the match.
+    SearchResponse:
+      type: object
+      properties:
+        matches:
+          type: array
+          items:
+            "$ref": "#/components/schemas/SearchMatch"
+        count:
+          type: integer
+          description: Total matches returned.
+      required:
+      - matches
+      - count
+    FindSpacesResponse:
+      type: object
+      properties:
+        spaces:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Space"
+        count:
+          type: integer
+          description: Total matches returned.
+      required:
+      - spaces
+      - count
+    WorldItemSummary:
+      type: object
+      description: World item summary used for notifications.
+      properties:
+        id:
+          type: string
+          description: Space or DM identifier.
+        name:
+          type: string
+          description: Display name if available.
+        type:
+          type: string
+          enum:
+          - space
+          - dm
+          description: Conversation type.
+        unreadCount:
+          type: integer
+          description: Unread message count.
+        unreadSubscribedTopicCount:
+          type: integer
+          description: Unread subscribed thread count.
+        lastMentionTime:
+          type: integer
+          format: int64
+          description: Last mention time in microseconds.
+        unreadReplyCount:
+          type: integer
+          description: Unread reply count.
+        lastMessageText:
+          type: string
+          description: Last message preview text.
+        subscribedThreadId:
+          type: string
+          description: Subscribed thread ID, if applicable.
+        isSubscribedToSpace:
+          type: boolean
+          description: True if subscribed to the entire space.
+        notificationCategory:
+          type: string
+          enum:
+          - direct_mention
+          - subscribed_thread
+          - subscribed_space
+          - direct_message
+          - none
+          description: Notification category for the item.
+      required:
+      - id
+      - type
+      - unreadCount
+      - unreadSubscribedTopicCount
+      - unreadReplyCount
+      - notificationCategory
+    NotificationsPagination:
+      type: object
+      description: Pagination metadata for notifications.
+      properties:
+        total:
+          type: integer
+          description: Total matching items.
+        offset:
+          type: integer
+          description: Offset applied.
+        limit:
+          type: integer
+          description: Limit applied.
+        returned:
+          type: integer
+          description: Number of items returned.
+        hasMore:
+          type: boolean
+          description: True if more items are available.
+      required:
+      - total
+      - offset
+      - limit
+      - returned
+      - hasMore
+    NotificationsResponse:
+      type: object
+      description: Notification response with optional message previews.
+      properties:
+        directMentions:
+          type: array
+          items:
+            "$ref": "#/components/schemas/WorldItemSummary"
+        subscribedThreads:
+          type: array
+          items:
+            "$ref": "#/components/schemas/WorldItemSummary"
+        subscribedSpaces:
+          type: array
+          items:
+            "$ref": "#/components/schemas/WorldItemSummary"
+        directMessages:
+          type: array
+          items:
+            "$ref": "#/components/schemas/WorldItemSummary"
+        readItems:
+          type: array
+          items:
+            "$ref": "#/components/schemas/WorldItemSummary"
+        directMeMentions:
+          type: array
+          items:
+            "$ref": "#/components/schemas/WorldItemSummary"
+        atAllMentions:
+          type: array
+          items:
+            "$ref": "#/components/schemas/WorldItemSummary"
+        unreads:
+          type: array
+          items:
+            "$ref": "#/components/schemas/WorldItemSummary"
+        dms:
+          type: array
+          items:
+            "$ref": "#/components/schemas/WorldItemSummary"
+        messages:
+          type: object
+          description: Map of spaceId to message previews when enabled.
+          additionalProperties:
+            type: array
+            items:
+              "$ref": "#/components/schemas/Message"
+        mentionsShortcutId:
+          type: string
+          description: Space ID for the mentions shortcut, when available.
+        pagination:
+          "$ref": "#/components/schemas/NotificationsPagination"
+      required:
+      - directMentions
+      - subscribedThreads
+      - subscribedSpaces
+      - directMessages
+      - unreads
+      - dms
+      - pagination
+    UnreadBadgeCounts:
+      type: object
+      description: Badge counts for unread sections.
+      properties:
+        totalUnread:
+          type: integer
+          description: Total unread spaces/DMs.
+        mentions:
+          type: integer
+          description: Total mentions.
+        directMentions:
+          type: integer
+          description: Total direct @you mentions.
+        allMentions:
+          type: integer
+          description: Total @all mentions.
+        subscribedThreads:
+          type: integer
+          description: Threads with unread activity.
+        subscribedSpaces:
+          type: integer
+          description: Spaces with unread activity.
+        directMessages:
+          type: integer
+          description: Direct messages with unread activity.
+      required:
+      - totalUnread
+      - mentions
+      - directMentions
+      - allMentions
+      - subscribedThreads
+      - subscribedSpaces
+      - directMessages
+    UnreadMention:
+      type: object
+      description: Mention notification metadata.
+      properties:
+        spaceId:
+          type: string
+          description: Space identifier.
+        spaceName:
+          type: string
+          description: Space display name.
+        topicId:
+          type: string
+          description: Topic identifier.
+        messageId:
+          type: string
+          description: Message identifier.
+        messageText:
+          type: string
+          description: Message text preview.
+        mentionType:
+          type: string
+          enum:
+          - direct
+          - all
+          - none
+          description: Mention type.
+        mentionedBy:
+          type: string
+          description: User who mentioned you.
+        timestamp:
+          type: integer
+          format: int64
+          description: Mention timestamp in microseconds.
+      required:
+      - spaceId
+      - mentionType
+    UnreadThread:
+      type: object
+      description: Thread unread notification.
+      properties:
+        spaceId:
+          type: string
+          description: Space identifier.
+        spaceName:
+          type: string
+          description: Space display name.
+        topicId:
+          type: string
+          description: Topic identifier.
+        unreadCount:
+          type: integer
+          description: Unread count for the thread.
+        lastMessageText:
+          type: string
+          description: Last message preview.
+        isSubscribed:
+          type: boolean
+          description: True if explicitly subscribed to the thread.
+        isParticipant:
+          type: boolean
+          description: True if the user participated in the thread.
+      required:
+      - spaceId
+      - topicId
+      - unreadCount
+      - isSubscribed
+      - isParticipant
+    UnreadSpace:
+      type: object
+      description: Space unread notification.
+      properties:
+        spaceId:
+          type: string
+          description: Space identifier.
+        spaceName:
+          type: string
+          description: Space display name.
+        type:
+          type: string
+          enum:
+          - space
+          - dm
+          description: Conversation type.
+        unreadCount:
+          type: integer
+          description: Unread count.
+        isSubscribed:
+          type: boolean
+          description: True if subscribed to the space.
+        hasMention:
+          type: boolean
+          description: True if there is a direct mention.
+      required:
+      - spaceId
+      - type
+      - unreadCount
+    UnreadSectionMention:
+      type: object
+      description: Mention section entry for the sidebar.
+      properties:
+        id:
+          type: string
+          description: Space identifier.
+        name:
+          type: string
+          description: Space display name.
+        type:
+          type: string
+          enum:
+          - mention
+          description: Section item type.
+        mentionType:
+          type: string
+          enum:
+          - direct
+          - all
+          - none
+          description: Mention type.
+        messageText:
+          type: string
+          description: Message preview.
+        mentionedBy:
+          type: string
+          description: User who mentioned you.
+        timestamp:
+          type: integer
+          format: int64
+          description: Mention timestamp.
+      required:
+      - id
+      - type
+      - mentionType
+    UnreadSectionDirectMention:
+      type: object
+      description: Direct mention section entry.
+      properties:
+        id:
+          type: string
+          description: Space identifier.
+        name:
+          type: string
+          description: Space display name.
+        type:
+          type: string
+          enum:
+          - direct_mention
+          description: Section item type.
+        messageText:
+          type: string
+          description: Message preview.
+        mentionedBy:
+          type: string
+          description: User who mentioned you.
+        timestamp:
+          type: integer
+          format: int64
+          description: Mention timestamp.
+      required:
+      - id
+      - type
+    UnreadSectionThread:
+      type: object
+      description: Thread section entry.
+      properties:
+        id:
+          type: string
+          description: Space identifier.
+        name:
+          type: string
+          description: Space display name.
+        type:
+          type: string
+          enum:
+          - thread
+          description: Section item type.
+        topicId:
+          type: string
+          description: Topic identifier.
+        unreadCount:
+          type: integer
+          description: Unread count for the thread.
+        lastMessageText:
+          type: string
+          description: Last message preview.
+        isSubscribed:
+          type: boolean
+          description: True if subscribed to the thread.
+        isParticipant:
+          type: boolean
+          description: True if the user participated in the thread.
+      required:
+      - id
+      - type
+      - topicId
+      - unreadCount
+      - isSubscribed
+      - isParticipant
+    UnreadSectionDm:
+      type: object
+      description: Direct message section entry.
+      properties:
+        id:
+          type: string
+          description: DM identifier.
+        name:
+          type: string
+          description: DM display name.
+        type:
+          type: string
+          enum:
+          - dm
+          description: Section item type.
+        unreadCount:
+          type: integer
+          description: Unread count for the DM.
+      required:
+      - id
+      - type
+      - unreadCount
+    UnreadSections:
+      type: object
+      description: Sidebar sections derived from unread data.
+      properties:
+        unreads:
+          type: array
+          items:
+            "$ref": "#/components/schemas/UnreadSpace"
+        mentions:
+          type: array
+          items:
+            "$ref": "#/components/schemas/UnreadSectionMention"
+        directMentions:
+          type: array
+          items:
+            "$ref": "#/components/schemas/UnreadSectionDirectMention"
+        threads:
+          type: array
+          items:
+            "$ref": "#/components/schemas/UnreadSectionThread"
+        directMessages:
+          type: array
+          items:
+            "$ref": "#/components/schemas/UnreadSectionDm"
+      required:
+      - unreads
+      - mentions
+      - directMentions
+      - threads
+      - directMessages
+    UnreadsRaw:
+      type: object
+      description: Raw unread data used to build the sidebar sections.
+      properties:
+        mentions:
+          type: array
+          items:
+            "$ref": "#/components/schemas/UnreadMention"
+        directMentions:
+          type: array
+          items:
+            "$ref": "#/components/schemas/UnreadMention"
+        subscribedThreads:
+          type: array
+          items:
+            "$ref": "#/components/schemas/UnreadThread"
+        subscribedSpaces:
+          type: array
+          items:
+            "$ref": "#/components/schemas/UnreadSpace"
+        directMessages:
+          type: array
+          items:
+            "$ref": "#/components/schemas/UnreadSpace"
+      required:
+      - mentions
+      - directMentions
+      - subscribedThreads
+      - subscribedSpaces
+      - directMessages
+    UnreadsResponse:
+      type: object
+      description: Categorized unread notifications for the UI.
+      properties:
+        badges:
+          "$ref": "#/components/schemas/UnreadBadgeCounts"
+        sections:
+          "$ref": "#/components/schemas/UnreadSections"
+        raw:
+          "$ref": "#/components/schemas/UnreadsRaw"
+        selfUserId:
+          type: string
+          description: Current user ID used for mention detection.
+      required:
+      - badges
+      - sections
+      - raw
+    UnreadsRefreshSummary:
+      type: object
+      description: Summary counts from refresh endpoint.
+      properties:
+        totalUnread:
+          type: integer
+          description: Total unread items.
+        directMessages:
+          type: integer
+          description: Unread DMs count.
+        spaces:
+          type: integer
+          description: Unread spaces count.
+        dmUnreadCount:
+          type: integer
+          description: Unread message count in DMs.
+        spaceUnreadCount:
+          type: integer
+          description: Unread message count in spaces.
+      required:
+      - totalUnread
+      - directMessages
+      - spaces
+      - dmUnreadCount
+      - spaceUnreadCount
+    UnreadsRefreshResponse:
+      type: object
+      description: Unread refresh response.
+      properties:
+        unreads:
+          type: array
+          items:
+            "$ref": "#/components/schemas/WorldItemSummary"
+        total:
+          type: integer
+          description: Total unread items.
+        summary:
+          "$ref": "#/components/schemas/UnreadsRefreshSummary"
+      required:
+      - unreads
+      - total
+      - summary
+    DmConversation:
+      type: object
+      description: DM conversation summary with optional messages.
+      properties:
+        id:
+          type: string
+          description: DM identifier.
+        name:
+          type: string
+          description: DM display name.
+        unreadCount:
+          type: integer
+          description: Unread message count.
+        lastMentionTime:
+          type: integer
+          format: int64
+          description: Last mention timestamp in microseconds.
+        unreadReplyCount:
+          type: integer
+          description: Unread reply count for the DM.
+        notificationCategory:
+          type: string
+          description: Notification category for the DM.
+        messages:
+          type: array
+          description: Message previews when messages=true.
+          items:
+            "$ref": "#/components/schemas/Message"
+      required:
+      - id
+      - unreadCount
+    DmsPagination:
+      type: object
+      description: Pagination metadata for DM lists.
+      properties:
+        offset:
+          type: integer
+          description: Offset applied.
+        limit:
+          type: integer
+          description: Limit applied.
+        hasMore:
+          type: boolean
+          description: True if more items are available.
+      required:
+      - offset
+      - limit
+      - hasMore
+    DmsResponse:
+      type: object
+      description: DM list response.
+      properties:
+        dms:
+          type: array
+          items:
+            "$ref": "#/components/schemas/DmConversation"
+        total:
+          type: integer
+          description: Total DMs matching the filter.
+        pagination:
+          "$ref": "#/components/schemas/DmsPagination"
+      required:
+      - dms
+      - total
+      - pagination
+    CustomStatus:
+      type: object
+      description: Custom status set by the user.
+      properties:
+        statusText:
+          type: string
+          description: Custom status text.
+        statusEmoji:
+          type: string
+          description: Emoji representing the status.
+        expiryTimestampUsec:
+          type: integer
+          format: int64
+          description: Expiry timestamp in microseconds.
+    UserPresence:
+      type: object
+      description: User presence information.
+      properties:
+        userId:
+          type: string
+          description: User identifier.
+        presence:
+          type: integer
+          description: Presence enum (0 undefined, 1 active, 2 inactive, 3 unknown,
+            4 sharing_disabled).
+        presenceLabel:
+          type: string
+          enum:
+          - active
+          - inactive
+          - unknown
+          - sharing_disabled
+          - undefined
+          description: Human-readable presence label.
+        dndState:
+          type: integer
+          description: Do-not-disturb enum (0 unknown, 1 available, 2 dnd).
+        dndLabel:
+          type: string
+          enum:
+          - available
+          - dnd
+          - unknown
+          description: Human-readable DND label.
+        activeUntilUsec:
+          type: integer
+          format: int64
+          description: Active-until timestamp in microseconds.
+        customStatus:
+          "$ref": "#/components/schemas/CustomStatus"
+      required:
+      - userId
+      - presence
+      - presenceLabel
+      - dndState
+      - dndLabel
+    UserPresenceResult:
+      type: object
+      description: Presence result for multiple users.
+      properties:
+        presences:
+          type: array
+          items:
+            "$ref": "#/components/schemas/UserPresence"
+        total:
+          type: integer
+          description: Number of presences returned.
+      required:
+      - presences
+      - total
+    UserPresenceWithProfile:
+      allOf:
+      - "$ref": "#/components/schemas/UserPresence"
+      - type: object
+        properties:
+          name:
+            type: string
+            description: Full display name.
+          email:
+            type: string
+            description: Primary email address.
+          firstName:
+            type: string
+            description: First name.
+          lastName:
+            type: string
+            description: Last name.
+          avatarUrl:
+            type: string
+            description: Avatar image URL.
+    UserPresenceWithProfileResult:
+      type: object
+      description: Presence result with profile data for multiple users.
+      properties:
+        presences:
+          type: array
+          items:
+            "$ref": "#/components/schemas/UserPresenceWithProfile"
+        total:
+          type: integer
+          description: Number of presences returned.
+      required:
+      - presences
+      - total
+    UserPresenceRawResponse:
+      type: object
+      description: Raw presence response with parsed output for debugging.
+      properties:
+        raw:
+          description: Raw API response data.
+          oneOf:
+          - type: array
+          - type: object
+        parsed:
+          "$ref": "#/components/schemas/UserPresenceResult"
+      required:
+      - raw
+      - parsed
+    UserPresenceWithDmId:
+      allOf:
+      - "$ref": "#/components/schemas/UserPresenceWithProfile"
+      - type: object
+        properties:
+          dmId:
+            type: string
+            description: Associated DM identifier.
+        required:
+        - dmId
+    DmPresenceResponse:
+      type: object
+      description: Presence results for DM participants.
+      properties:
+        presences:
+          type: array
+          items:
+            "$ref": "#/components/schemas/UserPresenceWithDmId"
+        total:
+          type: integer
+          description: Number of presence entries returned.
+      required:
+      - presences
+      - total
+    DmThreadsResult:
+      type: object
+      description: Thread listing response scoped to a DM. When format=messages, topics
+        is empty and messages contains the first message of each topic.
+      properties:
+        dmId:
+          type: string
+          description: DM identifier.
+        messages:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Message"
+        topics:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Topic"
+        pagination:
+          "$ref": "#/components/schemas/PaginationInfo"
+        total_topics:
+          type: integer
+          description: Total topics returned.
+        total_messages:
+          type: integer
+          description: Total messages returned.
+      required:
+      - dmId
+      - messages
+      - topics
+      - pagination
+      - total_topics
+      - total_messages

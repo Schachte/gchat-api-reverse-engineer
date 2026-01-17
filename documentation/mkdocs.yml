@@ -1,0 +1,54 @@
+site_name: Google Chat API Documentation
+site_url: ''
+use_directory_urls: false
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: deep purple
+    accent: amber
+  features:
+    - navigation.sections
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Terminology: terminology.md
+  - Development:
+    - Getting Started: development/index.md
+    - Hot Reload: development/hot-reload.md
+  - Architecture:
+    - Overview: architecture/index.md
+    - Repository Layout: architecture/repository-layout.md
+  - Authentication:
+    - Overview: authentication/index.md
+    - Cookie Extraction: authentication/cookie-extraction.md
+  - CLI:
+    - Overview: cli/index.md
+    - Commands Reference: cli/commands.md
+    - Logging & Debugging: cli/logging.md
+  - API:
+    - Overview: api/index.md
+    - Examples: api/examples.md
+    - OpenAPI Docs: api/openapi.md
+  - Reverse Engineering:
+    - Overview: reverse-engineering/index.md
+    - Protobuf & PBLite: reverse-engineering/protobuf-pblite.md
+    - Chrome Network Tutorial: reverse-engineering/chrome-network-tutorial.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search

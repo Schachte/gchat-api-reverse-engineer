@@ -1,118 +1,94 @@
-# Google Chat API Client
+# Google Chat API (Unofficial)
 
-A Node.js client for Google Chat that uses the same authentication flow as [purple-googlechat](https://github.com/EionRobb/purple-googlechat).
+## 1) What is this repo and why?
 
-## How it works
+Google Chat doesn’t have an official API for personal/consumer accounts. This repo is a reverse‑engineered TypeScript/Node.js client that talks to the same internal endpoints the web app uses (`chat.google.com`) so you can automate your own Chat account locally.
 
-This client replicates the authentication flow from purple-googlechat:
+## 2) Features
 
-1. **OAuth Login**: User authenticates via browser using Google's OAuth2 flow
-2. **Token Exchange**: Authorization code is exchanged for `refresh_token` and `access_token`
-3. **Dynamite Token**: The access token is exchanged for a "Dynamite" token via Google's internal token issuer
-4. **API Access**: The Dynamite token is used to authenticate with Google Chat's internal API
+- **CLI (`gchat`)**
+  - Search messages
+  - List 
+    - spaces
+    - DMs
+    - threads
+    - messages
+  - Send 
+    - Channel messages
+    - Private messages
+    - Thread replies
+  - Misc
+    - Batch data exporter for spaces and DMs
+    - Stay online (keep yourself logged online)
+    - Browser-based presence (`gchat presence`) via Playwright + storageState
+- **Local HTTP API server**
+  - JSON endpoints for the same operations as the CLI
+  - Web UI at `/ui`
+  - API docs (Scalar) at `/docs`
+- **TypeScript library**
+  - `GoogleChatClient` for programmatic use
+  - `utils` for higher-level workflows:
+    - `utils.startStayOnline()` – maintain presence via WebChannel + refresh
+    - `utils.exportChatBatches()` – cursor-based export batching for large spaces
+- **Cookie-based authentication**
+  - Uses cookies from an already logged-in browser profile + an XSRF token from `/mole/world`
+  - Cache defaults to `~/.gchat` (override with `--cache-dir` or `GCHAT_CACHE_DIR`)
 
-## Setup
+## 3) Setup
 
 ```bash
-cd googlechat-client
+# repo deps (dev helpers)
 npm install
+
+# optional: local config
+cp .env.example .env
+
+# main package (library + CLI + server)
+cd packages/gchat
+npm install
+npm run build
 ```
 
-## Authentication
+## 4) Running locally
 
-Run the auth script to authenticate:
+### CLI
 
 ```bash
-npm run auth
+cd packages/gchat
+
+# auth/cache status
+npm start -- auth status
+
+# list spaces
+npm start -- spaces
+
+# export last 7 days
+npm start -- export AAAA_SPACE_ID --since 7d --full-threads
 ```
 
-This will:
-1. Open your browser to Google's login page
-2. After login, Google shows you an authorization code
-3. Paste the code into the terminal
-4. Tokens are saved to `tokens.json`
-
-## Usage
-
-After authenticating, run the main script:
+### API server + UI
 
 ```bash
-npm start
+# from repo root
+npm run serve
+
+# hot reload server
+npm run dev
 ```
 
-This will:
-1. Refresh your tokens if needed
-2. List your Google Chat spaces/DMs
-3. Fetch recent messages from the first space
+- UI: `http://localhost:3000/ui`
+- API docs: `http://localhost:3000/docs`
 
-## API Overview
+### Docs + tests
 
-The client uses Google Chat's internal API endpoints:
+```bash
+# MkDocs site
+npm run dev:docs
 
-- `GET /api/get_self_user_status` - Get current user info
-- `POST /api/get_group_summaries` - List spaces/DMs
-- `POST /api/list_topics` - Get messages in a space
-
-### Request Format
-
-Requests use a JSON format that maps to protobuf field numbers:
-
-```javascript
-{
-  "1": {           // field 1 = RequestHeader
-    "2": 3,        // field 2 = client_type (3 = WEB)
-    "4": "en"      // field 4 = locale
-  },
-  "8": {           // field 8 = group_id
-    "1": {         // field 1 = space_id
-      "1": "spaceId123"
-    }
-  }
-}
+# Vitest
+npm test
 ```
 
-## Key Constants
+For deeper CLI docs see `packages/gchat/README.md`. For more docs see `documentation/`.
 
-From `libgooglechat.h`:
-
-```javascript
-const GOOGLE_CLIENT_ID = '936475272427.apps.googleusercontent.com';
-const GOOGLE_CLIENT_SECRET = 'KWsJlkaMn1jGLxQpWxMnOox-';
-const DYNAMITE_CLIENT_ID = '576267593750-sbi1m7khesgfh1e0f2nv5vqlfa4qr72m.apps.googleusercontent.com';
-```
-
-## Token Flow
-
-```
-Browser Login
-     │
-     ▼
-Authorization Code
-     │
-     ▼ (exchangeCodeForTokens)
-┌────────────────────┐
-│ refresh_token      │ ◄── Save this, used to get new access tokens
-│ access_token       │ ◄── Short-lived OAuth token  
-│ id_token          │
-└────────────────────┘
-     │
-     ▼ (getDynamiteToken)
-┌────────────────────┐
-│ dynamite_token     │ ◄── Used for Chat API calls
-│ expiresIn          │     (typically ~1 hour)
-└────────────────────┘
-```
-
-## Notes
-
-- Tokens expire and need to be refreshed (the client handles this automatically)
-- The Dynamite token is the actual credential used for API requests
-- The API uses protobuf under the hood, but accepts JSON with numeric field keys
-- Field numbers in JSON correspond to protobuf field definitions in `googlechat.proto`
-
-## Disclaimer
-
-This uses unofficial/internal Google APIs. Use at your own risk and be aware that:
-- The API could change at any time
-- This may violate Google's Terms of Service
-- This is for educational/personal use only
+Disclaimer: this uses unofficial/internal Google APIs. Endpoints and auth can change without notice.

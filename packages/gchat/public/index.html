@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Chat</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>Google Chat</h1>
+        <div class="user-info" id="user-info">Loading...</div>
+        <div class="connection-status" id="connection-status">
+          <span class="status-dot"></span>
+          <span class="status-text">Connecting...</span>
+        </div>
+        <div class="sidebar-settings">
+          <label class="sidebar-setting" title="When enabled, expanding one section collapses the others">
+            <input type="checkbox" id="sidebar-auto-collapse">
+            <span>Auto-collapse</span>
+          </label>
+        </div>
+        <div class="dev-controls" id="dev-controls">
+          <button class="dev-btn" id="dev-toggle" type="button" title="Toggle developer mode">Dev</button>
+          <button class="dev-btn" id="dev-events-btn" type="button" title="Show real-time events" style="display: none;">Events</button>
+        </div>
+      </div>
+
+      <div class="sidebar-sections" id="sidebar-sections">
+        <!-- Favorites Section -->
+        <div class="sidebar-section favorites-section" id="favorites-section" style="display: none;">
+          <div class="section-header" data-toggle="favorites">
+            <span class="toggle-icon">▼</span>
+            <span>Favorites</span>
+            <span class="count" id="favorites-count">0</span>
+          </div>
+          <ul class="channel-list" id="favorites-list"></ul>
+        </div>
+        <div class="sidebar-resizer" id="resizer-favorites-spaces" data-before="favorites-section" data-after="spaces-section" aria-hidden="true"></div>
+
+        <!-- Spaces Section -->
+        <div class="sidebar-section" id="spaces-section">
+          <div class="section-header" data-toggle="spaces">
+            <span class="toggle-icon">▼</span>
+            <span>Spaces</span>
+            <span class="count" id="spaces-count">0</span>
+          </div>
+          <ul class="channel-list" id="spaces-list"></ul>
+        </div>
+        <div class="sidebar-resizer" id="resizer-spaces-dms" data-before="spaces-section" data-after="dms-section" aria-hidden="true"></div>
+
+        <!-- DMs Section -->
+        <div class="sidebar-section" id="dms-section">
+          <div class="section-header" data-toggle="dms">
+            <span class="toggle-icon">▼</span>
+            <span>Direct Messages</span>
+            <span class="count" id="dms-count">0</span>
+          </div>
+          <ul class="channel-list" id="dms-list"></ul>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="content-header" id="content-header">
+        <h2 id="channel-name">Select a channel or DM</h2>
+        <div class="channel-info" id="channel-info"></div>
+      </div>
+
+      <div class="messages-container" id="messages-container">
+        <div class="empty-state" id="empty-state">
+          <div class="empty-icon">💬</div>
+          <p>Select a space or direct message to view conversations</p>
+        </div>
+        <div class="messages-list" id="messages-list" style="display: none;"></div>
+      </div>
+
+      <!-- Composer (bottom input) -->
+      <form class="composer" id="compose-form" autocomplete="off">
+        <textarea id="compose-input" rows="1" placeholder="Message…" disabled></textarea>
+        <button type="submit" id="compose-send" disabled>Send</button>
+      </form>
+
+      <div class="loading-overlay" id="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <span>Loading messages...</span>
+      </div>
+    </main>
+
+    <!-- Thread Panel (shown when viewing a thread) -->
+    <aside class="thread-panel" id="thread-panel" style="display: none;">
+      <div class="thread-header">
+        <h3>Thread</h3>
+        <button class="close-thread" id="close-thread">×</button>
+      </div>
+      <div class="thread-messages" id="thread-messages"></div>
+
+      <form class="composer composer-thread" id="thread-form" autocomplete="off">
+        <textarea id="thread-input" rows="1" placeholder="Reply in thread…" disabled></textarea>
+        <button type="submit" id="thread-send" disabled>Reply</button>
+      </form>
+    </aside>
+  </div>
+
+  <!-- Event Log Panel (collapsible) -->
+  <div class="event-log is-hidden" id="event-log">
+    <div class="event-log-header" id="event-log-header">
+      <span>Real-time Events</span>
+      <span class="event-count" id="event-count">0</span>
+      <button class="clear-events-btn" id="clear-events-btn">Clear</button>
+      <span class="toggle-btn">▼</span>
+    </div>
+    <div class="event-log-content" id="event-log-content"></div>
+  </div>
+
+  <!-- New message indicator -->
+  <div class="new-message-indicator" id="new-message-indicator" style="display: none;">
+    <span>↓ New messages</span>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
