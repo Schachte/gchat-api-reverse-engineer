@@ -1,29 +1,21 @@
-// Type definitions for Google Chat API client
 
-/**
- * Emoji associated with a space (extracted from mole_world response)
- */
 export interface SpaceEmoji {
-  unicode?: string;     // e.g., "🚨"
+  unicode?: string;     
 }
 
-/**
- * Enrichment data for a space (extracted from mole_world/paginated_world responses)
- */
 export interface SpaceEnrichment {
   emoji?: SpaceEmoji;
-  rosterId?: string;     // e.g., "hangouts-chat-xxx@cloudflare.com"
+  rosterId?: string;     
 }
 
 export interface Space {
   id: string;
   name?: string;
   type: 'space' | 'dm';
-  sortTimestamp?: number;  // Microseconds timestamp for pagination cursor
+  sortTimestamp?: number;  
 
-  // Enrichment fields (populated when ?enrich=true)
   emoji?: SpaceEmoji;
-  rosterId?: string;       // e.g., "hangouts-chat-xxx@cloudflare.com"
+  rosterId?: string;       
 }
 
 export interface SpacesPagination {
@@ -36,18 +28,17 @@ export interface SpacesResult {
   pagination: SpacesPagination;
 }
 
-// Annotation types for message content
 export enum AnnotationType {
   UNKNOWN = 0,
   USER_MENTION = 1,
   FORMAT = 2,
-  DRIVE = 3,            // Drive file attachment
+  DRIVE = 3,            
   URL = 4,
-  USER_MENTION_V2 = 6,  // Newer user mention format
-  IMAGE = 9,            // Inline image/GIF
-  UPLOAD = 10,          // File upload/attachment
+  USER_MENTION_V2 = 6,  
+  IMAGE = 9,            
+  UPLOAD = 10,          
   MEMBERSHIP_CHANGED = 11,
-  UPLOAD_METADATA = 13, // Upload metadata (alternative)
+  UPLOAD_METADATA = 13, 
 }
 
 export interface UserMention {
@@ -59,8 +50,8 @@ export interface UserMention {
 export interface UrlMetadata {
   url: string;
   title?: string;
-  image_url?: string;   // Preview/thumbnail image for the URL
-  mime_type?: string;   // MIME type if it's a direct media link
+  image_url?: string;   
+  mime_type?: string;   
 }
 
 export interface FormatMetadata {
@@ -72,14 +63,14 @@ export interface ImageMetadata {
   width?: number;
   height?: number;
   alt_text?: string;
-  content_type?: string;  // e.g., 'image/gif', 'image/png'
+  content_type?: string;  
 }
 
 export interface AttachmentMetadata {
   attachment_id?: string;
-  content_name?: string;  // filename
-  content_type?: string;  // MIME type
-  content_size?: number;  // file size in bytes
+  content_name?: string;  
+  content_type?: string;  
+  content_size?: number;  
   download_url?: string;
   thumbnail_url?: string;
 }
@@ -95,8 +86,6 @@ export interface Annotation {
   attachment_metadata?: AttachmentMetadata;
 }
 
-// Card types for rich interactive UI elements (e.g., alert cards from bots/webhooks)
-
 export interface CardButton {
   text: string;
   url?: string;
@@ -107,15 +96,12 @@ export interface CardButton {
 
 export interface CardWidget {
   type: 'text_paragraph' | 'decorated_text' | 'button_list';
-  // For text_paragraph
   html?: string;
   text?: string;
-  // For decorated_text
   icon_name?: string;
   icon_url?: string;
   label?: string;
   value?: string;
-  // For button_list
   buttons?: CardButton[];
 }
 
@@ -141,20 +127,17 @@ export interface Message {
   timestamp?: string;
   timestamp_usec?: number;
   sender?: string;
-  sender_id?: string;  // Numeric user ID (for lookups when sender name is unknown)
+  sender_id?: string;  
   sender_email?: string;
   sender_avatar_url?: string;
   is_thread_reply?: boolean;
   reply_index?: number;
-  // Annotation/mention support
   annotations?: Annotation[];
   mentions?: UserMention[];
   has_mention?: boolean;
-  // Extracted media for convenience
   images?: ImageMetadata[];
   attachments?: AttachmentMetadata[];
   urls?: UrlMetadata[];
-  // Rich card content (from bot/webhook messages)
   cards?: Card[];
 }
 
@@ -174,9 +157,6 @@ export interface SelfUser {
   avatarUrl?: string;
 }
 
-/**
- * User presence status enumeration
- */
 export enum PresenceStatus {
   UNDEFINED = 0,
   ACTIVE = 1,
@@ -185,27 +165,18 @@ export enum PresenceStatus {
   SHARING_DISABLED = 4,
 }
 
-/**
- * Do Not Disturb state enumeration
- */
 export enum DndStateStatus {
   UNKNOWN = 0,
   AVAILABLE = 1,
   DND = 2,
 }
 
-/**
- * Custom status set by a user
- */
 export interface CustomStatus {
   statusText?: string;
   statusEmoji?: string;
   expiryTimestampUsec?: number;
 }
 
-/**
- * User presence information
- */
 export interface UserPresence {
   userId: string;
   presence: PresenceStatus;
@@ -216,19 +187,11 @@ export interface UserPresence {
   customStatus?: CustomStatus;
 }
 
-/**
- * Result of a presence query for multiple users
- */
 export interface UserPresenceResult {
   presences: UserPresence[];
   total: number;
 }
 
-/**
- * Extended user presence including profile information.
- * Combines presence status with user profile data (name, email, avatar).
- * Use getUserPresenceWithProfile() to fetch this in a single call.
- */
 export interface UserPresenceWithProfile extends UserPresence {
   name?: string;
   email?: string;
@@ -237,9 +200,6 @@ export interface UserPresenceWithProfile extends UserPresence {
   avatarUrl?: string;
 }
 
-/**
- * Result of a presence+profile query for multiple users
- */
 export interface UserPresenceWithProfileResult {
   presences: UserPresenceWithProfile[];
   total: number;
@@ -250,7 +210,7 @@ export interface Topic {
   space_id: string;
   sort_time?: number;
   message_count: number;
-  has_more_replies?: boolean;  // True when there might be more replies than loaded
+  has_more_replies?: boolean;  
   replies: Message[];
 }
 
@@ -268,8 +228,6 @@ export interface ThreadsResult {
   total_topics: number;
   total_messages: number;
 }
-
-// Cursor-based (JSON/PBLite) list_topics pagination
 
 export interface ServerTopicsPaginationInfo {
   has_more: boolean;
@@ -308,13 +266,6 @@ export interface SearchMatch extends Message {
   snippet?: string;
 }
 
-// =========================================================================
-// Search API Types (SBNmJb RPC via batchexecute)
-// =========================================================================
-
-/**
- * Member info in search results
- */
 export interface SearchMember {
   userId: string;
   name: string;
@@ -324,9 +275,6 @@ export interface SearchMember {
   membershipType?: number;
 }
 
-/**
- * Creator or last sender info in search results
- */
 export interface SearchUserInfo {
   userId: string;
   name?: string;
@@ -334,23 +282,17 @@ export interface SearchUserInfo {
   avatarUrl?: string;
 }
 
-/**
- * A space/DM result from the search API
- */
 export interface SearchSpaceResult {
-  // Identity
-  spaceId: string;           // Full ID: "space/XXXXX" or "dm/XXXXX"
-  shortId: string;           // Just the ID part: "XXXXX"
+  spaceId: string;           
+  shortId: string;           
   type: 'space' | 'dm' | 'group_dm';
-  roomType?: string;         // "SPACE", "GROUP_DM", etc.
+  roomType?: string;         
 
-  // Display
   name: string;
   avatarUrl?: string;
   emoji?: string;
   description?: string;
 
-  // Timestamps (milliseconds)
   lastActivityMs?: number;
   lastMessageTimestampUsec?: string;
   lastReadTimestampUsec?: string;
@@ -358,14 +300,12 @@ export interface SearchSpaceResult {
   createdTimestampUsec?: string;
   sortTimestampMs?: number;
 
-  // Membership
   memberCount?: number;
   totalMemberCount?: number;
-  members?: SearchMember[];     // For DMs, the participants
+  members?: SearchMember[];     
   creatorInfo?: SearchUserInfo;
   lastSenderInfo?: SearchUserInfo;
 
-  // State
   isHidden?: boolean;
   isMuted?: boolean;
   isFollowing?: boolean;
@@ -373,17 +313,14 @@ export interface SearchSpaceResult {
   hasMessages?: boolean;
   unreadCount?: number;
 
-  // Organization
-  rosterId?: string;           // e.g., "hangouts-chat-xxx@cloudflare.com"
+  rosterId?: string;           
   orgUnit?: string;
 
-  // Notification
   notificationSettings?: {
     enabled?: boolean;
     level?: number;
   };
 
-  // Stats (from unread_stats field)
   unreadStats?: {
     totalUnread?: number;
     mentionUnread?: number;
@@ -391,41 +328,31 @@ export interface SearchSpaceResult {
   };
 }
 
-/**
- * Pagination info for search results
- */
 export interface SearchPagination {
-  cursor: string | null;       // Pass this to get next page
+  cursor: string | null;       
   hasMore: boolean;
   resultCount: number;
-  sessionId: string;           // Keep same for pagination
+  sessionId: string;           
 }
 
-/**
- * Complete search response
- */
 export interface SearchResponse {
   results: SearchSpaceResult[];
   pagination: SearchPagination;
 }
 
-/**
- * Options for search request
- */
 export interface SearchOptions {
-  maxPages?: number;           // Max pages to fetch (default: 1)
-  pageSize?: number;           // Results per page (default: 55)
-  cursor?: string;             // For manual pagination
-  sessionId?: string;          // Reuse session for pagination
+  maxPages?: number;           
+  pageSize?: number;           
+  cursor?: string;             
+  sessionId?: string;          
 }
 
-// Notification category for clearer filtering
 export type NotificationCategory =
-  | 'direct_mention'      // @mentioned you directly
-  | 'subscribed_thread'   // Activity in a thread you're following
-  | 'subscribed_space'    // Activity in a space you follow (but not thread-specific)
-  | 'direct_message'      // DM from someone
-  | 'none';               // No unread activity
+  | 'direct_mention'      
+  | 'subscribed_thread'   
+  | 'subscribed_space'    
+  | 'direct_message'      
+  | 'none';               
 
 export interface WorldItemSummary {
   id: string;
@@ -436,24 +363,13 @@ export interface WorldItemSummary {
   lastMentionTime?: number;
   unreadReplyCount: number;
   lastMessageText?: string;
-  // Enhanced notification info
-  subscribedThreadId?: string;       // Thread ID if following a specific thread
-  isSubscribedToSpace?: boolean;     // True if subscribed to the entire space
+  subscribedThreadId?: string;       
+  isSubscribedToSpace?: boolean;     
   notificationCategory: NotificationCategory;
 }
 
-// =========================================================================
-// Unread Notification System Types
-// =========================================================================
-
-/**
- * Mention type for categorizing @mentions
- */
 export type MentionType = 'direct' | 'all' | 'none';
 
-/**
- * An unread mention notification
- */
 export interface UnreadMention {
   spaceId: string;
   spaceName?: string;
@@ -461,15 +377,12 @@ export interface UnreadMention {
   messageId?: string;
   messageText?: string;
   mentionType: MentionType;
-  mentionedBy?: string;         // User who mentioned you
+  mentionedBy?: string;         
   mentionedByUserId?: string;
-  timestamp?: number;           // Microseconds
-  timestampFormatted?: string;  // ISO 8601
+  timestamp?: number;           
+  timestampFormatted?: string;  
 }
 
-/**
- * An unread thread notification (threads you're involved in)
- */
 export interface UnreadThread {
   spaceId: string;
   spaceName?: string;
@@ -480,13 +393,10 @@ export interface UnreadThread {
   lastMessageSenderId?: string;
   lastMessageTimestamp?: number;
   lastMessageTimestampFormatted?: string;
-  isSubscribed: boolean;        // Explicitly following this thread
-  isParticipant: boolean;       // You've sent messages in this thread
+  isSubscribed: boolean;        
+  isParticipant: boolean;       
 }
 
-/**
- * An unread space/channel notification
- */
 export interface UnreadSpace {
   spaceId: string;
   spaceName?: string;
@@ -499,13 +409,10 @@ export interface UnreadSpace {
   lastMessageSender?: string;
   lastMessageTimestamp?: number;
   isSubscribed: boolean;
-  hasMention: boolean;          // Has @mention for you
-  hasDirect: boolean;           // Is a DM
+  hasMention: boolean;          
+  hasDirect: boolean;           
 }
 
-/**
- * Badge counts for UI display
- */
 export interface UnreadBadgeCounts {
   totalUnread: number;
   mentions: number;
@@ -516,55 +423,37 @@ export interface UnreadBadgeCounts {
   directMessages: number;
 }
 
-/**
- * Categorized unread notifications for sidebar display
- */
 export interface UnreadNotifications {
-  // Badge counts for quick display
   badges: UnreadBadgeCounts;
   
-  // Separate sections for sidebar
-  mentions: UnreadMention[];           // @mentions to you (direct + @all)
-  directMentions: UnreadMention[];     // Only direct @you mentions
-  allMentions: UnreadMention[];        // Only @all mentions
-  subscribedThreads: UnreadThread[];   // Threads you're following/involved in
-  subscribedSpaces: UnreadSpace[];     // Spaces you're subscribed to
-  directMessages: UnreadSpace[];       // DM conversations with unreads
+  mentions: UnreadMention[];           
+  directMentions: UnreadMention[];     
+  allMentions: UnreadMention[];        
+  subscribedThreads: UnreadThread[];   
+  subscribedSpaces: UnreadSpace[];     
+  directMessages: UnreadSpace[];       
   
-  // All unread items (union of above for convenience)
   allUnreads: WorldItemSummary[];
   
-  // Metadata
   lastFetched: number;
   selfUserId?: string;
 }
 
-/**
- * Options for fetching unread notifications
- */
 export interface GetUnreadsOptions {
-  /** Fetch actual message content to determine mention types */
   fetchMessages?: boolean;
-  /** Number of messages to fetch per space for mention detection */
   messagesPerSpace?: number;
-  /** Only include unreads (filter out read items) */
   unreadOnly?: boolean;
-  /** Include thread participation check (slower but more accurate) */
   checkParticipation?: boolean;
-  /** Parallel fetch limit */
   parallel?: number;
 }
 
-/**
- * Read state for a single group/space
- */
 export interface GroupReadState {
   groupId: string;
   lastReadTime?: number;
   unreadMessageCount: number;
   starred?: boolean;
   unreadSubscribedTopicCount: number;
-  unreadSubscribedTopics?: string[];  // Topic IDs
+  unreadSubscribedTopics?: string[];  
   hasUnreadThread?: boolean;
   markAsUnreadTimestamp?: number;
   notificationSettings?: {
@@ -573,9 +462,6 @@ export interface GroupReadState {
   };
 }
 
-/**
- * Result of marking a group as read
- */
 export interface MarkGroupReadstateResult {
   success: boolean;
   groupId: string;
@@ -584,9 +470,6 @@ export interface MarkGroupReadstateResult {
   error?: string;
 }
 
-/**
- * Read state for a single topic/thread
- */
 export interface TopicReadState {
   topicId: string;
   lastReadTime?: number;
@@ -612,31 +495,31 @@ export interface Cookies {
 
 export interface RequestHeader {
   '1'?: unknown;
-  '2': number;  // client_type
-  '4': string;  // locale
+  '2': number;  
+  '4': string;  
 }
 
 export interface GroupId {
-  '1': { '1': string };  // space_id
+  '1': { '1': string };  
 }
 
 export interface ListTopicsRequest {
   '1': RequestHeader;
-  '2': number;   // page_size_for_topics
-  '3': number;   // page_size_for_replies
-  '6'?: number;  // page_size_for_unread_replies
-  '7'?: number;  // page_size_for_read_replies
-  '8': GroupId;  // group_id
-  '9'?: { '1': string };  // group_not_older_than
+  '2': number;   
+  '3': number;   
+  '6'?: number;  
+  '7'?: number;  
+  '8': GroupId;  
+  '9'?: { '1': string };  
 }
 
 export interface ListMessagesRequest {
   '1': RequestHeader;
-  '2': {  // parent_id
-    '1': {  // topic_id
-      '1': GroupId;  // group_id
-      '2': string;   // topic_id string
+  '2': {  
+    '1': {  
+      '1': GroupId;  
+      '2': string;   
     };
   };
-  '3': number;  // page_size
+  '3': number;  
 }

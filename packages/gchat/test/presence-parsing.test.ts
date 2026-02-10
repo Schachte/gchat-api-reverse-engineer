@@ -9,12 +9,11 @@ describe('Presence parsing', () => {
     const parseUserPresence = (item: unknown[]) => (client as any).parseUserPresence(item);
 
     const item = [
-      // user id structure varies; this is a common nested form: [[id], type]
       [[['1234567890']], 1],
-      '1', // presence (ACTIVE) as string
-      '1700000000000000', // active_until_usec as string
-      '2', // dnd_state (DND) as string
-      [null, ['In a meeting', '💬', '1700000000000000']], // custom status
+      '1', 
+      '1700000000000000', 
+      '2', 
+      [null, ['In a meeting', '💬', '1700000000000000']], 
     ];
 
     const parsed = parseUserPresence(item);
@@ -54,11 +53,11 @@ describe('Presence parsing', () => {
     const parseUserStatusEvent = (channel as any)._parseUserStatusEvent as (body: unknown[]) => any;
 
     const statusData = [
-      [[['99']], 1], // userId nested
-      '2', // presence (INACTIVE) as string
-      '1700000000000000', // active_until_usec as string
-      '2', // dnd_state (DND) as string
-      [null, ['OOO', '🏝️', '1700000000000000']], // custom status
+      [[['99']], 1], 
+      '2', 
+      '1700000000000000', 
+      '2', 
+      [null, ['OOO', '🏝️', '1700000000000000']], 
     ];
 
     const body: unknown[] = [];

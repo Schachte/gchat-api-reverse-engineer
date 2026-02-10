@@ -13,23 +13,10 @@ export type StayOnlineEvent =
 export interface StayOnlineOptions {
   pingIntervalSec?: number;
   presenceTimeoutSec?: number;
-  /**
-   * Subscribe to conversations for real-time events.
-   * This can also be used to ensure presence visibility (Chat often requires active subs).
-   */
   subscribe?: boolean;
   conversations?: Conversation[];
-  /**
-   * If subscribe=true and conversations are not provided, list spaces via the client.
-   */
   fetchConversations?: boolean;
-  /**
-   * Override how the WebChannel is created (useful for testing or custom transports).
-   */
   createChannel?: (cookieString: string) => GoogleChatChannel;
-  /**
-   * Emit structured lifecycle events (connect/ping/message/etc).
-   */
   onEvent?: (evt: StayOnlineEvent) => void;
 }
 
@@ -39,12 +26,6 @@ export interface StayOnlineSession {
   done: Promise<void>;
 }
 
-/**
- * Keep your Google Chat presence "online" by maintaining a WebChannel connection
- * and periodically refreshing presence sharing.
- *
- * Requires an authenticated client (or it will authenticate on demand).
- */
 export async function startStayOnline(
   client: GoogleChatClient,
   options: StayOnlineOptions = {}
@@ -58,7 +39,6 @@ export async function startStayOnline(
     onEvent,
   } = options;
 
-  // Ensure auth/cookie string is available.
   await client.authenticate();
   const cookieString = client.getCookieString();
 
@@ -102,7 +82,6 @@ export async function startStayOnline(
       }
     }
 
-    // Prime presence state immediately on connect.
     try {
       await channel.sendPing();
       await client.setPresenceShared(true, presenceTimeoutSec);
@@ -110,7 +89,6 @@ export async function startStayOnline(
       emit({ type: 'error', timestamp, error: err as Error });
     }
 
-    // Periodic refresh.
     if (pingTimer) clearInterval(pingTimer);
     pingTimer = setInterval(async () => {
       const ts = new Date().toISOString();

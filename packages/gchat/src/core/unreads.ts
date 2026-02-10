@@ -1,13 +1,3 @@
-/**
- * Unread Notification Service
- *
- * Provides categorized unread notifications for sidebar display:
- * - Direct @mentions to you
- * - @all mentions
- * - Threads you're subscribed to or participating in
- * - Spaces you're subscribed to
- * - Direct messages
- */
 
 import type { GoogleChatClient } from './client.js';
 import type {
@@ -22,9 +12,6 @@ import type {
 } from './types.js';
 import { log } from './logger.js';
 
-/**
- * Service for managing and categorizing unread notifications
- */
 export class UnreadNotificationService {
   private client: GoogleChatClient;
 
@@ -32,12 +19,6 @@ export class UnreadNotificationService {
     this.client = client;
   }
 
-  /**
-   * Get categorized unread notifications for sidebar display
-   *
-   * @param options Configuration for fetching unreads
-   * @returns Categorized unread notifications
-   */
   async getUnreadNotifications(
     options: GetUnreadsOptions = {}
   ): Promise<UnreadNotifications> {
@@ -52,14 +33,11 @@ export class UnreadNotificationService {
     const now = Date.now();
     log.client.debug('UnreadNotificationService: Fetching unread notifications');
 
-    // Get self user ID for mention detection
     const selfUser = await this.client.getSelfUser();
     const selfUserId = selfUser.userId;
 
-    // Fetch world items (spaces/DMs with read state)
     const { items } = await this.client.fetchWorldItems();
 
-    // Initialize result structures
     const mentions: UnreadMention[] = [];
     const directMentions: UnreadMention[] = [];
     const allMentions: UnreadMention[] = [];
@@ -67,22 +45,18 @@ export class UnreadNotificationService {
     const subscribedSpaces: UnreadSpace[] = [];
     const directMessages: UnreadSpace[] = [];
 
-    // Filter to unread items if requested
     const itemsToProcess = unreadOnly
       ? items.filter((item) => item.notificationCategory !== 'none')
       : items;
 
-    // First pass: categorize by notification type from world items
     for (const item of itemsToProcess) {
       const unreadSpace = this.worldItemToUnreadSpace(item);
 
       switch (item.notificationCategory) {
         case 'direct_mention':
-          // Will be refined with actual message fetch below
           subscribedSpaces.push(unreadSpace);
           break;
         case 'subscribed_thread':
-          // Has activity in a thread the user follows
           if (item.subscribedThreadId) {
             subscribedThreads.push({
               spaceId: item.id,
@@ -91,7 +65,7 @@ export class UnreadNotificationService {
               unreadCount: item.unreadSubscribedTopicCount,
               lastMessageText: item.lastMessageText,
               isSubscribed: true,
-              isParticipant: false, // Will be determined if checkParticipation is true
+              isParticipant: false, 
             });
           }
           subscribedSpaces.push(unreadSpace);
@@ -103,14 +77,12 @@ export class UnreadNotificationService {
           directMessages.push(unreadSpace);
           break;
         default:
-          // No unread activity, but include if not filtering
           if (!unreadOnly) {
             subscribedSpaces.push(unreadSpace);
           }
       }
     }
 
-    // Second pass: fetch messages to determine actual mention types
     if (fetchMessages) {
       const mentionCandidates = itemsToProcess.filter(
         (item) =>
@@ -129,7 +101,6 @@ export class UnreadNotificationService {
       );
     }
 
-    // Third pass: check thread participation if requested
     if (checkParticipation && subscribedThreads.length > 0) {
       await this.checkThreadParticipation(
         subscribedThreads,
@@ -138,7 +109,6 @@ export class UnreadNotificationService {
       );
     }
 
-    // Calculate badge counts
     const badges = this.calculateBadgeCounts(
       mentions,
       directMentions,
@@ -171,19 +141,13 @@ export class UnreadNotificationService {
     return result;
   }
 
-  /**
-   * Get badge counts only (lightweight, uses cached data if available)
-   */
   async getBadgeCounts(): Promise<UnreadBadgeCounts> {
     const notifications = await this.getUnreadNotifications({
-      fetchMessages: false, // Skip message fetch for speed
+      fetchMessages: false, 
     });
     return notifications.badges;
   }
 
-  /**
-   * Get only direct @mentions (not @all)
-   */
   async getDirectMentions(
     options: Omit<GetUnreadsOptions, 'fetchMessages'> = {}
   ): Promise<UnreadMention[]> {
@@ -194,9 +158,6 @@ export class UnreadNotificationService {
     return notifications.directMentions;
   }
 
-  /**
-   * Get only threads you're subscribed to or participating in
-   */
   async getSubscribedThreads(
     options: Omit<GetUnreadsOptions, 'fetchMessages'> = {}
   ): Promise<UnreadThread[]> {
@@ -207,9 +168,6 @@ export class UnreadNotificationService {
     return notifications.subscribedThreads;
   }
 
-  /**
-   * Get all unread spaces/channels
-   */
   async getUnreadSpaces(): Promise<UnreadSpace[]> {
     const notifications = await this.getUnreadNotifications({
       fetchMessages: false,
@@ -217,20 +175,12 @@ export class UnreadNotificationService {
     return notifications.subscribedSpaces;
   }
 
-  /**
-   * Get unread DMs
-   */
   async getUnreadDMs(): Promise<UnreadSpace[]> {
     const notifications = await this.getUnreadNotifications({
       fetchMessages: false,
     });
     return notifications.directMessages;
   }
-
-
-  // =========================================================================
-  // Private helpers
-  // =========================================================================
 
   private worldItemToUnreadSpace(item: WorldItemSummary): UnreadSpace {
     return {
@@ -265,7 +215,6 @@ export class UnreadNotificationService {
       'mention candidates'
     );
 
-    // Process in parallel batches
     for (let i = 0; i < candidates.length; i += parallel) {
       const batch = candidates.slice(i, i + parallel);
       const results = await Promise.allSettled(
@@ -310,7 +259,6 @@ export class UnreadNotificationService {
       }
     }
 
-    // Sort by timestamp (newest first)
     const sortByTime = (a: UnreadMention, b: UnreadMention) =>
       (b.timestamp || 0) - (a.timestamp || 0);
 
@@ -327,7 +275,6 @@ export class UnreadNotificationService {
       return { type: 'none' };
     }
 
-    // Check for direct @you mention
     const hasDirect = message.mentions.some(
       (m) => m.user_id === selfUserId && m.mention_type === 'user'
     );
@@ -335,7 +282,6 @@ export class UnreadNotificationService {
       return { type: 'direct' };
     }
 
-    // Check for @all mention
     const hasAll = message.mentions.some((m) => m.mention_type === 'all');
     if (hasAll) {
       return { type: 'all' };
@@ -357,7 +303,6 @@ export class UnreadNotificationService {
       'threads'
     );
 
-    // Process in parallel batches
     for (let i = 0; i < threads.length; i += parallel) {
       const batch = threads.slice(i, i + parallel);
       const results = await Promise.allSettled(
@@ -376,12 +321,10 @@ export class UnreadNotificationService {
 
         const { thread, messages } = settledResult.value;
 
-        // Check if user has sent any messages in this thread
         thread.isParticipant = messages.some(
           (msg) => msg.sender_id === selfUserId
         );
 
-        // Update last message info
         if (messages.length > 0) {
           const lastMsg = messages[messages.length - 1];
           thread.lastMessageText = lastMsg.text;
@@ -402,7 +345,6 @@ export class UnreadNotificationService {
     subscribedSpaces: UnreadSpace[],
     directMessages: UnreadSpace[]
   ): UnreadBadgeCounts {
-    // Count unique spaces for total unread
     const uniqueSpaceIds = new Set<string>();
 
     for (const m of mentions) uniqueSpaceIds.add(m.spaceId);
@@ -424,9 +366,6 @@ export class UnreadNotificationService {
   }
 }
 
-/**
- * Create an UnreadNotificationService instance
- */
 export function createUnreadService(
   client: GoogleChatClient
 ): UnreadNotificationService {

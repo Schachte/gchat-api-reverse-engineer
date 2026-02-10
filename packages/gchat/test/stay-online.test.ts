@@ -67,7 +67,6 @@ describe('utils/stay-online', () => {
       onEvent: (evt) => events.push(evt),
     });
 
-    // Allow connect handler to run (microtasks).
     await Promise.resolve();
     await Promise.resolve();
 
@@ -78,18 +77,15 @@ describe('utils/stay-online', () => {
     expect(channel?.cookieString).toBe('cookie=abc');
     expect(channel?.connect).toHaveBeenCalledTimes(1);
 
-    // Subscribed on connect.
     expect(channel?.subscribeToAll).toHaveBeenCalledTimes(1);
     expect(channel?.subscribeToAll).toHaveBeenCalledWith([
       { id: 'space-1', type: 'space', name: 'Space 1' },
       { id: 'space-2', type: 'space', name: 'Space 2' },
     ]);
 
-    // Prime presence and first ping.
     expect(channel?.sendPing).toHaveBeenCalledTimes(1);
     expect(client.setPresenceShared).toHaveBeenCalledTimes(1);
 
-    // Interval tick.
     await vi.advanceTimersByTimeAsync(10_000);
     await Promise.resolve();
 
@@ -98,7 +94,6 @@ describe('utils/stay-online', () => {
 
     expect(events.map((e) => e.type)).toEqual(expect.arrayContaining(['connect', 'subscribed', 'ping']));
 
-    // Stop cancels the interval and disconnects.
     session.stop();
     await Promise.resolve();
     await session.done;

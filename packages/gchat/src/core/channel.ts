@@ -1,40 +1,20 @@
-/**
- * Google Chat WebChannel Client
- *
- * Implements Google's BrowserChannel protocol for real-time messaging.
- * Based on purple-googlechat and browser traffic analysis.
- *
- * Protocol flow:
- * 1. Register → Get COMPASS cookie with csessionid
- * 2. Init request → Get SID (session ID)
- * 3. Long-poll loop → Receive streaming events
- * 4. Forward channel → Send subscriptions and pings
- */
 
 import { EventEmitter } from './event-emitter.js';
 import { log } from './logger.js';
 
 const CHANNEL_URL_BASE = 'https://chat.google.com/u/0/webchannel/';
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-const PUSH_TIMEOUT = 60000; // 60 seconds
+const PUSH_TIMEOUT = 60000; 
 const MAX_RETRIES = 5;
 const RETRY_BACKOFF_BASE = 2;
 
-/**
- * Parse length-prefixed chunks from the streaming response
- * Format: "length\ndata" where length is in UTF-16 code units
- */
 class ChunkParser {
   private _buffer = '';
 
-  /**
-   * Parse new data and yield complete chunks
-   */
   *getChunks(newData: string): Generator<string> {
     this._buffer += newData;
 
     while (true) {
-      // Find the length prefix
       const newlineIndex = this._buffer.indexOf('\n');
       if (newlineIndex === -1) break;
 
@@ -42,21 +22,17 @@ class ChunkParser {
       const length = parseInt(lengthStr, 10);
 
       if (isNaN(length)) {
-        // Invalid length, skip this character and try again
         this._buffer = this._buffer.slice(1);
         continue;
       }
 
-      // Check if we have enough data
       const dataStart = newlineIndex + 1;
       const availableLength = this._buffer.length - dataStart;
 
       if (availableLength < length) {
-        // Not enough data yet
         break;
       }
 
-      // Extract the chunk
       const chunk = this._buffer.slice(dataStart, dataStart + length);
       this._buffer = this._buffer.slice(dataStart + length);
 
@@ -65,9 +41,6 @@ class ChunkParser {
   }
 }
 
-/**
- * Generate unique ID for requests (mimics Google's format)
- */
 function uniqueId(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
@@ -77,9 +50,6 @@ function uniqueId(): string {
   return result;
 }
 
-/**
- * Event types from Google Chat
- */
 export const EventType = {
   UNKNOWN: 0,
   USER_ADDED_TO_GROUP: 1,
@@ -96,7 +66,7 @@ export const EventType = {
   USER_STATUS_UPDATED: 25,
   TYPING_STATE_CHANGED: 29,
   READ_RECEIPT_CHANGED: 36,
-  GROUP_NO_OP: 38,  // Notification that something changed in the group
+  GROUP_NO_OP: 38,  
 } as const;
 
 export type EventTypeValue = typeof EventType[keyof typeof EventType];
@@ -121,18 +91,12 @@ export interface ParsedMessage {
   creator?: MessageCreator;
 }
 
-/**
- * Custom status set by a user (for real-time events)
- */
 export interface ChannelCustomStatus {
   statusText?: string;
   statusEmoji?: string;
   expiryTimestampUsec?: number;
 }
 
-/**
- * Enhanced user status from real-time events
- */
 export interface ChannelUserStatus {
   userId?: string;
   presence?: number;
@@ -162,48 +126,33 @@ export interface Conversation {
   name?: string;
 }
 
-/**
- * WebChannel client for Google Chat real-time events
- */
 export class GoogleChatChannel extends EventEmitter {
   private _cookieString: string;
 
-  // Channel state
   private _sid: string | null = null;
   private _csessionid: string | null = null;
-  private _aid = 0; // Acknowledged ID
-  private _ofs = 0; // Offset for sent events
+  private _aid = 0; 
+  private _ofs = 0; 
   private _rid: number;
 
-  // Connection state
   private _isConnected = false;
   private _shouldReconnect = true;
   private _retryCount = 0;
   private _abortController: AbortController | null = null;
   private _chunkParser: ChunkParser | null = null;
 
-  // Subscribed groups
   private _subscribedGroups = new Set<string>();
 
-  /**
-   * @param cookieString - Full cookie string for authentication
-   */
   constructor(cookieString: string) {
     super();
     this._cookieString = cookieString;
     this._rid = Math.floor(Math.random() * 90000) + 10000;
   }
 
-  /**
-   * Whether the channel is currently connected
-   */
   get isConnected(): boolean {
     return this._isConnected;
   }
 
-  /**
-   * Connect and start listening for events
-   */
   async connect(): Promise<void> {
     this._shouldReconnect = true;
     this._retryCount = 0;
@@ -211,10 +160,8 @@ export class GoogleChatChannel extends EventEmitter {
     log.channel.debug('Starting connection...');
 
     try {
-      // Step 1: Register to get csessionid
       await this._register();
 
-      // Step 2: Start listening loop
       await this._listenLoop();
     } catch (err) {
       log.channel.error('Connection error:', err);
@@ -223,9 +170,6 @@ export class GoogleChatChannel extends EventEmitter {
     }
   }
 
-  /**
-   * Disconnect the channel
-   */
   disconnect(): void {
     log.channel.debug('Disconnecting...');
     this._shouldReconnect = false;
@@ -241,10 +185,6 @@ export class GoogleChatChannel extends EventEmitter {
     }
   }
 
-  /**
-   * Send a ping to signal active presence
-   * This keeps the user appearing "online" in Google Chat
-   */
   async sendPing(): Promise<void> {
     if (!this._sid) {
       log.channel.warn('Cannot send ping - not connected');
@@ -253,27 +193,21 @@ export class GoogleChatChannel extends EventEmitter {
 
     log.channel.debug('Sending activity ping');
 
-    // pblite array format for PingEvent
-    // StreamEventsRequest: ping_event is field 2 (index 1)
-    // PingEvent fields: 1=state, 3=application_focus_state, 5=client_interactive_state, 6=client_notifications_enabled
     const pingEvent = [
-      null,  // index 0 (field 1) - not set
-      [      // index 1 (field 2: ping_event)
-        1,     // index 0 (field 1: state) = ACTIVE
-        null,  // index 1 (field 2) - not set
-        1,     // index 2 (field 3: application_focus_state) = FOCUS_STATE_FOREGROUND
-        null,  // index 3 (field 4) - not set
-        1,     // index 4 (field 5: client_interactive_state) = INTERACTIVE
-        true,  // index 5 (field 6: client_notifications_enabled)
+      null,  
+      [      
+        1,     
+        null,  
+        1,     
+        null,  
+        1,     
+        true,  
       ]
     ];
 
     await this._sendStreamEvent(pingEvent);
   }
 
-  /**
-   * Subscribe to a group (space or DM) for real-time events
-   */
   async subscribeToGroup(groupId: string, isDm = false): Promise<void> {
     const key = `${isDm ? 'dm' : 'space'}:${groupId}`;
 
@@ -284,26 +218,20 @@ export class GoogleChatChannel extends EventEmitter {
 
     console.log(`[Channel] Subscribing to ${key}`);
 
-    // pblite array format: field number maps to array index (1-indexed to 0-indexed)
-    // GroupId: field 1 = space_id, field 3 = dm_id
-    // SpaceId/DmId: field 1 = the ID string
     const groupIdArr = isDm
-      ? [null, null, [groupId]]  // dm_id at index 2 (field 3)
-      : [[groupId]];             // space_id at index 0 (field 1)
+      ? [null, null, [groupId]]  
+      : [[groupId]];             
 
-    // StreamEventsRequest fields: 1=platform, 2=client_info, 3=client_session_id,
-    //   4=sample_id, 5=sample_ids, 6=ping_event, 7=clock_sync_request, 8=group_subscription_event
-    // GroupSubscriptionEvent: field 1 = group_ids (array)
     const streamEventsRequest = [
-      null,  // index 0 (field 1: platform)
-      null,  // index 1 (field 2: client_info)
-      null,  // index 2 (field 3: client_session_id)
-      null,  // index 3 (field 4: sample_id)
-      null,  // index 4 (field 5: sample_ids)
-      null,  // index 5 (field 6: ping_event)
-      null,  // index 6 (field 7: clock_sync_request)
-      [      // index 7 (field 8: group_subscription_event)
-        [groupIdArr]  // group_ids array at index 0 (field 1)
+      null,  
+      null,  
+      null,  
+      null,  
+      null,  
+      null,  
+      null,  
+      [      
+        [groupIdArr]  
       ]
     ];
 
@@ -311,39 +239,31 @@ export class GoogleChatChannel extends EventEmitter {
     this._subscribedGroups.add(key);
   }
 
-  /**
-   * Subscribe to all conversations (spaces + DMs)
-   */
   async subscribeToAll(conversations: Conversation[]): Promise<void> {
     console.log(`[Channel] Subscribing to ${conversations.length} conversations...`);
 
-    // pblite array format for GroupId
     const groupIds = conversations.map(c => {
       const isDm = c.type === 'dm';
       return isDm
-        ? [null, null, [c.id]]  // dm_id at index 2 (field 3)
-        : [[c.id]];             // space_id at index 0 (field 1)
+        ? [null, null, [c.id]]  
+        : [[c.id]];             
     });
 
-    // StreamEventsRequest fields: 1=platform, 2=client_info, 3=client_session_id,
-    //   4=sample_id, 5=sample_ids, 6=ping_event, 7=clock_sync_request, 8=group_subscription_event
-    // GroupSubscriptionEvent: field 1 = group_ids (array)
     const streamEventsRequest = [
-      null,  // index 0 (field 1: platform)
-      null,  // index 1 (field 2: client_info)
-      null,  // index 2 (field 3: client_session_id)
-      null,  // index 3 (field 4: sample_id)
-      null,  // index 4 (field 5: sample_ids)
-      null,  // index 5 (field 6: ping_event)
-      null,  // index 6 (field 7: clock_sync_request)
-      [      // index 7 (field 8: group_subscription_event)
-        groupIds  // group_ids array at index 0 (field 1)
+      null,  
+      null,  
+      null,  
+      null,  
+      null,  
+      null,  
+      null,  
+      [      
+        groupIds  
       ]
     ];
 
     await this._sendStreamEvent(streamEventsRequest);
 
-    // Track subscriptions
     for (const c of conversations) {
       const key = `${c.type}:${c.id}`;
       this._subscribedGroups.add(key);
@@ -352,11 +272,6 @@ export class GoogleChatChannel extends EventEmitter {
     console.log(`[Channel] Subscribed to ${conversations.length} conversations`);
   }
 
-  // ========== Private Methods ==========
-
-  /**
-   * Register channel and get csessionid from COMPASS cookie
-   */
   private async _register(): Promise<void> {
     log.channel.debug('Registering...');
 
@@ -378,7 +293,6 @@ export class GoogleChatChannel extends EventEmitter {
       throw new Error(`Register failed (${response.status}): ${text}`);
     }
 
-    // Extract csessionid from COMPASS cookie
     const setCookie = response.headers.get('set-cookie');
     if (setCookie) {
       const compassMatch = setCookie.match(/COMPASS=dynamite-ui=([^;]+)/);
@@ -391,9 +305,6 @@ export class GoogleChatChannel extends EventEmitter {
     log.channel.debug('Registration complete');
   }
 
-  /**
-   * Main listening loop with retry logic
-   */
   private async _listenLoop(): Promise<void> {
     while (this._shouldReconnect && this._retryCount <= MAX_RETRIES) {
       if (this._retryCount > 0) {
@@ -407,7 +318,6 @@ export class GoogleChatChannel extends EventEmitter {
       try {
         console.log(`[Channel] Listen loop iteration, SID: ${this._sid ? 'set' : 'null'}`);
         await this._longPollRequest();
-        // Clean exit - reset retry count
         log.channel.debug('Long-poll request completed normally, looping...');
         this._retryCount = 0;
       } catch (err) {
@@ -424,7 +334,6 @@ export class GoogleChatChannel extends EventEmitter {
           this.emit('disconnect');
         }
 
-        // Re-register on SID errors
         if ((err as Error).message.includes('Unknown SID') || (err as Error).message.includes('400')) {
           log.channel.debug('SID invalid, re-registering...');
           try {
@@ -442,9 +351,6 @@ export class GoogleChatChannel extends EventEmitter {
     }
   }
 
-  /**
-   * Perform a long-polling request
-   */
   private async _longPollRequest(): Promise<void> {
     this._abortController = new AbortController();
     const timeoutId = setTimeout(() => {
@@ -455,14 +361,13 @@ export class GoogleChatChannel extends EventEmitter {
 
     try {
       if (this._sid === null) {
-        // Initial request to get SID - use GET method with $req param (like Python impl)
         log.channel.debug('Opening INITIAL request to get SID...');
 
         const params = new URLSearchParams({
           VER: '8',
           RID: String(this._rid),
           CVER: '22',
-          '$req': 'count=1&ofs=0&req0_data=%5B%5D',  // encoded empty array []
+          '$req': 'count=1&ofs=0&req0_data=%5B%5D',  
           SID: 'null',
           zx: uniqueId(),
           t: '1',
@@ -486,7 +391,6 @@ export class GoogleChatChannel extends EventEmitter {
           throw new Error(`Initial request failed (${response.status}): ${text}`);
         }
 
-        // Check for SID in X-HTTP-Initial-Response header first
         const initialResponse = response.headers.get('X-HTTP-Initial-Response');
         let newSid: string | null = null;
 
@@ -495,7 +399,6 @@ export class GoogleChatChannel extends EventEmitter {
           newSid = this._parseSidFromHeader(initialResponse);
         }
 
-        // Fall back to body if header not present
         if (!newSid) {
           const text = await response.text();
           log.channel.debug('Initial response body (first 300 chars):', text.substring(0, 300));
@@ -508,17 +411,14 @@ export class GoogleChatChannel extends EventEmitter {
           this._aid = 0;
           this._ofs = 0;
 
-          // Send acknowledgment request (required per Python impl)
           await this._sendSidAcknowledgment();
 
-          // Send initial ping
           await this._sendInitialPing();
         } else {
           throw new Error('Failed to get SID from initial response');
         }
 
       } else {
-        // Subsequent long-poll requests - use GET method with RID=rpc
         log.channel.debug('Opening long-poll request, SID:', this._sid.substring(0, 15) + '...', 'AID:', this._aid);
 
         const params = new URLSearchParams({
@@ -549,7 +449,6 @@ export class GoogleChatChannel extends EventEmitter {
           throw new Error(`Long-poll failed (${response.status}): ${text}`);
         }
 
-        // Process streaming response
         await this._processStreamResponse(response);
       }
 
@@ -559,14 +458,9 @@ export class GoogleChatChannel extends EventEmitter {
     }
   }
 
-  /**
-   * Parse SID from X-HTTP-Initial-Response header
-   * Format: [[0,["c","SID_HERE",...]]
-   */
   private _parseSidFromHeader(headerValue: string): string | null {
     try {
       const data = JSON.parse(headerValue);
-      // Format: [[arrayId, ["c", "SID", ...]]]
       if (Array.isArray(data) && data[0] && Array.isArray(data[0][1])) {
         const inner = data[0][1];
         if (inner[0] === 'c' && typeof inner[1] === 'string') {
@@ -580,10 +474,6 @@ export class GoogleChatChannel extends EventEmitter {
     }
   }
 
-  /**
-   * Send SID acknowledgment request (required after getting SID)
-   * This tells the server we received the SID
-   */
   private async _sendSidAcknowledgment(): Promise<void> {
     log.channel.debug('Sending SID acknowledgment');
 
@@ -614,20 +504,14 @@ export class GoogleChatChannel extends EventEmitter {
     }
   }
 
-  /**
-   * Extract SID from initial response body
-   * Format: "length\n[[0,["c","SID_HERE","",8,12,...]]]"
-   */
   private _extractSidFromBody(text: string): string | null {
     try {
-      // Skip length prefix
       const newlineIndex = text.indexOf('\n');
       if (newlineIndex === -1) return null;
 
       const jsonStr = text.slice(newlineIndex + 1);
       const data = JSON.parse(jsonStr);
 
-      // Format: [[arrayId, ["c", "SID", ...]]]
       if (Array.isArray(data) && data[0] && Array.isArray(data[0][1])) {
         const inner = data[0][1];
         if (inner[0] === 'c' && typeof inner[1] === 'string') {
@@ -641,33 +525,24 @@ export class GoogleChatChannel extends EventEmitter {
     }
   }
 
-  /**
-   * Send initial ping event
-   */
   private async _sendInitialPing(): Promise<void> {
     log.channel.debug('Sending initial ping');
 
-    // pblite array format (verified with Python pblite.encode)
-    // StreamEventsRequest: ping_event is field 2 (index 1)
-    // PingEvent fields: 1=state, 3=application_focus_state, 5=client_interactive_state, 6=client_notifications_enabled
     const pingEvent = [
-      null,  // index 0 (field 1) - not set
-      [      // index 1 (field 2: ping_event)
-        1,     // index 0 (field 1: state) = ACTIVE
-        null,  // index 1 (field 2) - not set
-        1,     // index 2 (field 3: application_focus_state) = FOCUS_STATE_FOREGROUND
-        null,  // index 3 (field 4) - not set
-        1,     // index 4 (field 5: client_interactive_state) = INTERACTIVE
-        true,  // index 5 (field 6: client_notifications_enabled)
+      null,  
+      [      
+        1,     
+        null,  
+        1,     
+        null,  
+        1,     
+        true,  
       ]
     ];
 
     await this._sendStreamEvent(pingEvent);
   }
 
-  /**
-   * Send a stream event via the forward channel
-   */
   private async _sendStreamEvent(streamEventsRequest: unknown): Promise<void> {
     if (!this._sid) {
       log.channel.warn('Cannot send event - no SID');
@@ -711,9 +586,6 @@ export class GoogleChatChannel extends EventEmitter {
     }
   }
 
-  /**
-   * Process streaming response body
-   */
   private async _processStreamResponse(response: Response): Promise<void> {
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();
@@ -744,11 +616,7 @@ export class GoogleChatChannel extends EventEmitter {
     }
   }
 
-  /**
-   * Process a complete chunk
-   */
   private async _processChunk(chunk: string): Promise<void> {
-    // First chunk marks connection established
     if (!this._isConnected) {
       this._isConnected = true;
       log.channel.debug('Connected');
@@ -756,16 +624,13 @@ export class GoogleChatChannel extends EventEmitter {
     }
 
     try {
-      // Chunk is a JSON array: [[array_id, data_array], ...]
       const containerArray = JSON.parse(chunk);
 
       for (const innerArray of containerArray) {
         const [arrayId, dataArray] = innerArray;
 
-        // Update acknowledged ID
         this._aid = arrayId;
 
-        // Process the data array
         await this._processDataArray(dataArray);
       }
     } catch (err) {
@@ -773,9 +638,6 @@ export class GoogleChatChannel extends EventEmitter {
     }
   }
 
-  /**
-   * Process a data array from the channel
-   */
   private async _processDataArray(dataArray: unknown): Promise<void> {
     log.channel.debug('_processDataArray called, dataArray type:', typeof dataArray, 'isArray:', Array.isArray(dataArray));
 
@@ -791,7 +653,6 @@ export class GoogleChatChannel extends EventEmitter {
       log.channel.debug('_processDataArray item', i, 'type:', typeof item, 'isArray:', Array.isArray(item));
 
       if (item === 'noop' || item === 'close') {
-        // Heartbeat or close signal
         log.channel.debug('_processDataArray: Got', item);
         continue;
       }
@@ -800,13 +661,10 @@ export class GoogleChatChannel extends EventEmitter {
         let eventData: unknown[];
 
         if (typeof item === 'object' && item !== null && 'data' in item) {
-          // Base64-encoded protobuf data (legacy format)
           log.channel.debug('_processDataArray: Found base64 data field, decoding...');
           const decoded = this._decodeBase64((item as { data: string }).data);
           eventData = JSON.parse(decoded);
         } else if (Array.isArray(item)) {
-          // Direct pblite format - this is StreamEventsResponse
-          // Field 1 (index 0) is the Event
           log.channel.debug('_processDataArray: Found pblite array');
           eventData = item;
         } else {
@@ -827,24 +685,15 @@ export class GoogleChatChannel extends EventEmitter {
     }
   }
 
-  /**
-   * Decode base64 data
-   */
   private _decodeBase64(data: string): string {
-    // Node.js
     return Buffer.from(data, 'base64').toString('utf-8');
   }
 
-  /**
-   * Parse event from pblite array (StreamEventsResponse format)
-   */
   private _parseEventFromPblite(pbliteData: unknown[]): ChannelEvent | null {
     try {
-      // Log the full pbliteData structure first
       log.channel.debug('_parseEventFromPblite: pbliteData length:', pbliteData.length);
       log.channel.debug('_parseEventFromPblite: pbliteData[0..2]:', JSON.stringify(pbliteData.slice(0, 3)).substring(0, 500));
       
-      // StreamEventsResponse format - field 1 (index 0) is the Event
       const eventData = pbliteData[0] as unknown[];
       
       if (!eventData || !Array.isArray(eventData)) {
@@ -852,14 +701,11 @@ export class GoogleChatChannel extends EventEmitter {
         return null;
       }
 
-      // Log which fields are present in eventData
       const presentFields = eventData.map((v, i) => v !== null && v !== undefined ? i : null).filter(i => i !== null);
       log.channel.debug('_parseEventFromPblite: Event fields present:', presentFields);
       
-      // Log raw event for debugging
       log.channel.debug('_parseEventFromPblite: RAW EVENT:', JSON.stringify(eventData).substring(0, 800));
 
-      // Parse the event structure
       const event: ChannelEvent = {
         raw: eventData,
         type: null,
@@ -867,11 +713,9 @@ export class GoogleChatChannel extends EventEmitter {
         body: null,
       };
 
-      // Field 1 (index 0): group_id
       if (eventData[0]) {
         const groupId = eventData[0] as unknown[][];
         log.channel.debug('_parseEventFromPblite: GroupId structure:', JSON.stringify(groupId).substring(0, 200));
-        // GroupId: field 1 = space_id, field 3 = dm_id
         const spaceId = groupId[0] as unknown[] | undefined;
         const dmId = groupId[2] as unknown[] | undefined;
         if (spaceId?.[0]) {
@@ -881,16 +725,12 @@ export class GoogleChatChannel extends EventEmitter {
         }
       }
 
-      // Field 3 (index 2): event_type (may not be set - often comes from body)
       event.type = eventData[2] as EventTypeValue;
 
-      // Field 4 (index 3): body (singular)
       const singleBody = eventData[3] as unknown[] | undefined;
       
-      // Field 8 (index 7): bodies (plural) - Google often uses this instead of body
       const eventBodies = eventData[7] as unknown[][] | undefined;
       
-      // Collect all bodies to process (like Python client does)
       const allBodies: unknown[][] = [];
       if (singleBody) {
         allBodies.push(singleBody);
@@ -901,22 +741,19 @@ export class GoogleChatChannel extends EventEmitter {
       
       log.channel.debug('_parseEventFromPblite: Processing', allBodies.length, 'bodies');
       
-      // Process each body and find MESSAGE_POSTED (type 6)
       for (let i = 0; i < allBodies.length; i++) {
         const body = allBodies[i];
         const bodyEventType = body[11] as EventTypeValue | undefined;
         const bodyFields = body.map((v, idx) => v !== null && v !== undefined ? idx : null).filter(idx => idx !== null);
         console.log(`[Channel] _parseEventFromPblite: Body[${i}] event_type:`, bodyEventType, 'fields:', bodyFields);
         
-        // Check for message_posted at field 6 (index 5)
         if (body[5]) {
           console.log(`[Channel] _parseEventFromPblite: Body[${i}] has message_posted!`);
           event.type = EventType.MESSAGE_POSTED;
           event.body = this._parseEventBody(EventType.MESSAGE_POSTED, body, {});
-          break; // Found the message, use this body
+          break; 
         }
         
-        // If this body has event_type 6, use it
         if (bodyEventType === EventType.MESSAGE_POSTED) {
           console.log(`[Channel] _parseEventFromPblite: Body[${i}] is MESSAGE_POSTED`);
           event.type = EventType.MESSAGE_POSTED;
@@ -925,7 +762,6 @@ export class GoogleChatChannel extends EventEmitter {
         }
       }
       
-      // If no MESSAGE_POSTED found, use first body with its event_type
       if (event.type !== EventType.MESSAGE_POSTED && allBodies.length > 0) {
         const firstBody = allBodies[0];
         const firstBodyType = firstBody[11] as EventTypeValue | undefined;
@@ -944,9 +780,6 @@ export class GoogleChatChannel extends EventEmitter {
     }
   }
 
-  /**
-   * Parse event body based on event type
-   */
   private _parseEventBody(eventType: EventTypeValue | null, body: unknown[], extraFields?: Record<string, unknown>): ChannelEvent['body'] {
     switch (eventType) {
       case EventType.MESSAGE_POSTED:
@@ -962,12 +795,7 @@ export class GoogleChatChannel extends EventEmitter {
     }
   }
 
-  /**
-   * Parse message posted event
-   */
   private _parseMessageEvent(body: unknown[], extraFields?: Record<string, unknown>): ChannelEvent['body'] {
-    // EventBody.message_posted is field 6 (index 5) - this is a MessageEvent
-    // Can also be in extraFields with key '6'
     let messageEvent = body[5] as unknown[] | undefined;
     if (!messageEvent && extraFields?.['6']) {
       messageEvent = extraFields['6'] as unknown[];
@@ -979,7 +807,6 @@ export class GoogleChatChannel extends EventEmitter {
       return { raw: body };
     }
 
-    // MessageEvent.message is field 1 (index 0) - this is the actual Message
     const message = messageEvent[0] as unknown[] | undefined;
     if (!message) {
       log.channel.debug('_parseMessageEvent: No Message in MessageEvent');
@@ -989,25 +816,13 @@ export class GoogleChatChannel extends EventEmitter {
     return this._parseMessageData(message, body);
   }
 
-  /**
-   * Parse message data structure (Message protobuf)
-   */
   private _parseMessageData(message: unknown[], raw: unknown[]): ChannelEvent['body'] {
-    // Message fields:
-    // - field 1 (index 0): id (MessageId)
-    // - field 2 (index 1): creator (User)
-    // - field 3 (index 2): create_time (timestamp)
-    // - field 10 (index 9): text_body
     log.channel.debug('_parseMessageData: Message preview:', JSON.stringify(message).substring(0, 400));
     
-    // MessageId structure: [[null, null, null, [null, topic_id, [[space_id]]]], message_id]
     const messageId = message[0] as unknown[] | undefined;
-    // User structure: [user_id, name, avatar_url, email, ...]
     const creator = message[1] as unknown[] | undefined;
-    // UserId structure: [id_string]
     const creatorUserId = creator?.[0] as unknown[] | undefined;
     
-    // Extract topic_id from nested structure: messageId[0][3][1]
     let topicId: string | undefined;
     if (Array.isArray(messageId?.[0])) {
       const parentId = messageId[0] as unknown[];
@@ -1020,8 +835,8 @@ export class GoogleChatChannel extends EventEmitter {
       message: {
         id: messageId?.[1] as string | undefined,
         topic_id: topicId,
-        text: message[9] as string | undefined,  // text_body is field 10 (index 9)
-        timestamp: message[2] as string | undefined,  // create_time is field 3 (index 2)
+        text: message[9] as string | undefined,  
+        timestamp: message[2] as string | undefined,  
         creator: {
           id: creatorUserId?.[0] as string | undefined,
           name: creator?.[1] as string | undefined,
@@ -1033,10 +848,6 @@ export class GoogleChatChannel extends EventEmitter {
     };
   }
 
-  /**
-   * Parse typing state changed event
-   * EventBody.typing_state_changed is field 26 (index 25)
-   */
   private _parseTypingEvent(body: unknown[]): ChannelEvent['body'] {
     const typingData = (body[25] || body[0]) as unknown[] | undefined;
     return {
@@ -1048,10 +859,6 @@ export class GoogleChatChannel extends EventEmitter {
     };
   }
 
-  /**
-   * Parse read receipt event
-   * EventBody.read_receipt_changed is field 33 (index 32)
-   */
   private _parseReadReceiptEvent(body: unknown[]): ChannelEvent['body'] {
     const receiptData = (body[32] || body[0]) as unknown[] | undefined;
     return {
@@ -1063,20 +870,6 @@ export class GoogleChatChannel extends EventEmitter {
     };
   }
 
-  /**
-   * Parse user status event
-   * EventBody.user_status_updated is field 23 (index 22)
-   *
-   * UserPresence structure:
-   * - item[0][0] = user_id (UserId)
-   * - item[1] = presence enum (0=undefined, 1=active, 2=inactive, 3=unknown, 4=sharing_disabled)
-   * - item[2] = active_until_usec (timestamp in microseconds)
-   * - item[3] = dnd_state enum (0=unknown, 1=available, 2=dnd)
-   * - item[4] = custom_status (UserStatus)
-   *   - item[4][1][0] = status_text
-   *   - item[4][1][1] = status_emoji
-   *   - item[4][1][2] = expiry_timestamp_usec
-   */
   private _parseUserStatusEvent(body: unknown[]): ChannelEvent['body'] {
     const statusData = (body[22] || body[0]) as unknown[] | undefined;
     if (!statusData) return { userStatus: {}, raw: body };
@@ -1096,10 +889,8 @@ export class GoogleChatChannel extends EventEmitter {
       return undefined;
     };
 
-    // User ID is often nested (e.g., [[id], type]).
     const userId = unwrapFirstString(statusData?.[0]);
 
-    // Presence enum at item[1]
     const presenceValue =
       typeof statusData[1] === 'number'
         ? statusData[1]
@@ -1112,7 +903,6 @@ export class GoogleChatChannel extends EventEmitter {
       4: 'sharing_disabled',
     };
 
-    // DND state at item[3]
     const dndValue =
       typeof statusData[3] === 'number'
         ? statusData[3]
@@ -1123,7 +913,6 @@ export class GoogleChatChannel extends EventEmitter {
       2: 'dnd',
     };
 
-    // Active until at item[2]
     let activeUntilUsec: number | undefined;
     if (typeof statusData[2] === 'number') {
       activeUntilUsec = statusData[2];
@@ -1131,7 +920,6 @@ export class GoogleChatChannel extends EventEmitter {
       activeUntilUsec = parseInt(statusData[2], 10);
     }
 
-    // Custom status at item[4]
     let customStatus: ChannelCustomStatus | undefined;
     if (Array.isArray(statusData[4]) && Array.isArray(statusData[4][1])) {
       const cs = statusData[4][1] as unknown[];
@@ -1159,9 +947,6 @@ export class GoogleChatChannel extends EventEmitter {
     };
   }
 
-  /**
-   * Emit typed events for convenience
-   */
   private _emitTypedEvent(event: ChannelEvent): void {
     switch (event.type) {
       case EventType.MESSAGE_POSTED:
@@ -1187,7 +972,6 @@ export class GoogleChatChannel extends EventEmitter {
         break;
       case EventType.TOPIC_CREATED:
       case EventType.GROUP_NO_OP:
-        // These are change notifications - emit so UI can refresh
         this.emit('groupChanged', event);
         break;
     }

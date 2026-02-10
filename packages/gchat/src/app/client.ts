@@ -15,7 +15,6 @@ export const DEFAULT_CACHE_DIR = process.env.GCHAT_CACHE_DIR || path.join(homedi
 
 export function resolveCacheDir(options: { cacheDir?: string } = {}): string {
   const resolved = path.resolve(options.cacheDir || DEFAULT_CACHE_DIR);
-  // Keep a single source of truth for any modules that rely on env var defaults.
   process.env.GCHAT_CACHE_DIR = resolved;
   return resolved;
 }
@@ -29,7 +28,6 @@ export async function createClient(options: CreateClientOptions = {}): Promise<G
   try {
     mkdirSync(cacheDir, { recursive: true });
   } catch {
-    // ignore
   }
 
   if (options.refresh) {

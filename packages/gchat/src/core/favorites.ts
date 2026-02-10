@@ -66,24 +66,15 @@ export interface Favorite {
   created_at: number;
 }
 
-/**
- * Get all favorites
- */
 export function getFavorites(): Favorite[] {
   const state = getState();
   return [...state.favorites].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
 }
 
-/**
- * Check if an item is favorited
- */
 export function isFavorite(id: string): boolean {
   return getState().favorites.some((f) => f.id === id);
 }
 
-/**
- * Add a favorite
- */
 export function addFavorite(id: string, name: string, type: 'space' | 'dm'): Favorite {
   const created_at = Math.floor(Date.now() / 1000);
   const favorite: Favorite = { id, name, type, created_at };
@@ -96,9 +87,6 @@ export function addFavorite(id: string, name: string, type: 'space' | 'dm'): Fav
   return favorite;
 }
 
-/**
- * Remove a favorite
- */
 export function removeFavorite(id: string): boolean {
   const state = getState();
   const before = state.favorites.length;
@@ -108,24 +96,14 @@ export function removeFavorite(id: string): boolean {
   return true;
 }
 
-/**
- * Get favorite IDs as a Set for quick lookup
- */
 export function getFavoriteIds(): Set<string> {
   return new Set(getState().favorites.map((f) => f.id));
 }
 
-/**
- * Reset in-memory cache (for cleanup/tests)
- */
 export function closeDb(): void {
   stateCache = null;
   statePathCache = null;
 }
-
-// =========================================================================
-// Hidden Spaces
-// =========================================================================
 
 export interface HiddenSpace {
   id: string;
@@ -134,24 +112,15 @@ export interface HiddenSpace {
   created_at: number;
 }
 
-/**
- * Get all hidden spaces
- */
 export function getHidden(): HiddenSpace[] {
   const state = getState();
   return [...state.hidden].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
 }
 
-/**
- * Check if an item is hidden
- */
 export function isHidden(id: string): boolean {
   return getState().hidden.some((h) => h.id === id);
 }
 
-/**
- * Hide a space/DM
- */
 export function addHidden(id: string, name: string, type: 'space' | 'dm'): HiddenSpace {
   const created_at = Math.floor(Date.now() / 1000);
   const hidden: HiddenSpace = { id, name, type, created_at };
@@ -164,9 +133,6 @@ export function addHidden(id: string, name: string, type: 'space' | 'dm'): Hidde
   return hidden;
 }
 
-/**
- * Unhide a space/DM
- */
 export function removeHidden(id: string): boolean {
   const state = getState();
   const before = state.hidden.length;
@@ -176,16 +142,9 @@ export function removeHidden(id: string): boolean {
   return true;
 }
 
-/**
- * Get hidden IDs as a Set for quick lookup
- */
 export function getHiddenIds(): Set<string> {
   return new Set(getState().hidden.map((h) => h.id));
 }
-
-// =========================================================================
-// Last Viewed
-// =========================================================================
 
 export interface LastViewed {
   channel_id: string;

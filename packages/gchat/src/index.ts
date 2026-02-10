@@ -1,5 +1,3 @@
-// Google Chat Client Library
-// Export everything for programmatic use
 
 export { GoogleChatClient } from './core/client.js';
 export * from './core/types.js';
@@ -31,5 +29,4 @@ export {
   createUnreadService,
 } from './core/unreads.js';
 
-// High-level utilities (built on top of the core client/channel APIs)
 export * as utils from './utils/index.js';

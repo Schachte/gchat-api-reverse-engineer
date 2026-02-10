@@ -20,9 +20,6 @@ import {
   setLastViewed,
 } from '../core/favorites.js';
 
-// API Server
-// =========================================================================
-
 const SCALAR_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -142,10 +139,6 @@ async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknow
   });
 }
 
-// =========================================================================
-// WebSocket Manager
-// =========================================================================
-
 class WebSocketManager {
   private clients = new Set<WebSocket>();
   private wss: WebSocketServer | null = null;
@@ -157,12 +150,10 @@ class WebSocketManager {
       log.ws.debug('Client connected');
       this.clients.add(ws);
 
-      // Send connection confirmation
       const channelStatus = chatChannel?.isConnected ? 'connected' : 'connecting';
       ws.send(JSON.stringify({ type: 'connected', message: 'WebSocket connected', channelStatus }));
       ws.send(JSON.stringify({ type: 'channel_status', status: channelStatus }));
 
-      // Setup ping/pong heartbeat to keep connection alive
       let isAlive = true;
       ws.on('pong', () => {
         isAlive = true;
@@ -177,13 +168,12 @@ class WebSocketManager {
         }
         isAlive = false;
         ws.ping();
-      }, 30000); // Ping every 30 seconds
+      }, 30000); 
 
       ws.on('message', (data: Buffer) => {
         try {
           const msg = JSON.parse(data.toString());
           log.ws.debug('Received:', msg);
-          // Handle client messages if needed
         } catch {
           log.ws.warn('Invalid message received');
         }
@@ -210,7 +200,7 @@ class WebSocketManager {
     const eventType = (event as { type?: string })?.type || 'unknown';
     log.ws.debug(`Broadcasting ${eventType} to ${this.clients.size} clients`);
     for (const client of this.clients) {
-      if (client.readyState === 1) { // WebSocket.OPEN
+      if (client.readyState === 1) { 
         client.send(message);
       }
     }
@@ -221,7 +211,6 @@ class WebSocketManager {
   }
 }
 
-// Global WebSocket manager and channel
 let wsManager: WebSocketManager | null = null;
 let chatChannel: GoogleChatChannel | null = null;
 
@@ -235,7 +224,6 @@ async function initChannel(cookieString: string, client: GoogleChatClient): Prom
 
   chatChannel = new GoogleChatChannel(cookieString);
 
-  // Set up event handlers
   chatChannel.on('connect', () => {
     log.channel.info('Connected to Google Chat');
     wsManager?.broadcast({ type: 'channel_connected' });
@@ -298,8 +286,6 @@ async function initChannel(cookieString: string, client: GoogleChatClient): Prom
     });
   });
 
-  // groupChanged events are now redundant since MESSAGE_POSTED works
-  // Just log them for debugging
   chatChannel.on('groupChanged', (eventArg) => {
     const event = eventArg as ChannelEvent;
     log.channel.debug('Group changed (not broadcast):', event.groupId?.id, 'type:', event.type);
@@ -312,14 +298,12 @@ async function initChannel(cookieString: string, client: GoogleChatClient): Prom
     wsManager?.broadcast({ type: 'channel_status', status: 'error', error: err.message });
   });
 
-  // Connect in background
   chatChannel.connect().catch(err => {
     log.channel.error('Connection failed:', err.message);
     wsManager?.broadcast({ type: 'channel_error', error: err.message });
     wsManager?.broadcast({ type: 'channel_status', status: 'error', error: err.message });
   });
 
-  // Subscribe to all spaces/DMs
   try {
     const spaces = await client.listSpaces();
     const conversations: Conversation[] = spaces.map(s => ({
@@ -328,7 +312,6 @@ async function initChannel(cookieString: string, client: GoogleChatClient): Prom
       name: s.name,
     }));
 
-    // Wait for connection before subscribing
     log.channel.debug('Waiting for connection... isConnected:', chatChannel?.isConnected);
     await new Promise<void>((resolve) => {
       if (chatChannel?.isConnected) {
@@ -345,7 +328,6 @@ async function initChannel(cookieString: string, client: GoogleChatClient): Prom
             resolve();
           }
         });
-        // Timeout after 10 seconds
         setTimeout(() => {
           if (!resolved) {
             resolved = true;
@@ -384,7 +366,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const { path, query } = parseQuery(req.url || '/');
 
-    // CORS preflight
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
         'Access-Control-Allow-Origin': '*',
@@ -395,7 +376,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
     }
 
     try {
-      // Chat UI + static assets (served from public/ if present)
       if (path === '/' || path === '/ui' || path === '/index.html') {
         const indexPath = join(PUBLIC_ROOT, 'index.html');
         if (existsSync(indexPath)) {
@@ -422,13 +402,11 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         return res.end(readFileSync(filePath, 'utf8'));
       }
 
-      // Scalar API docs
       if (path === '/docs') {
         res.writeHead(200, { 'Content-Type': 'text/html' });
         return res.end(SCALAR_HTML);
       }
 
-      // Endpoints JSON
       if (path === '/endpoints') {
         return sendJson(res, 200, {
           endpoints: [
@@ -461,7 +439,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         });
       }
 
-      // OpenAPI spec
       if (path === '/openapi.json') {
         return sendJson(res, 200, loadOpenApiSpec());
       }
@@ -470,20 +447,13 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         return res.end(loadOpenApiYaml());
       }
 
-      // API routes
-      // GET /api/spaces - List all spaces
-      // ?paginate=true - Enable pagination mode (returns one page at a time)
-      // ?pageSize=N - Items per page (default 200)
-      // ?cursor=timestamp - Pagination cursor for next page
-      // ?enrich=false - Disable enrichment data (emoji, rosterId) - enabled by default
       if (path === '/api/spaces') {
         const pageSize = query.pageSize ? parseInt(query.pageSize, 10) : 200;
         const cursor = query.cursor ? parseInt(query.cursor, 10) : undefined;
         const paginateMode = query.paginate === 'true' || cursor !== undefined;
-        const enrich = query.enrich !== 'false';  // Default to true
+        const enrich = query.enrich !== 'false';  
 
         if (paginateMode) {
-          // Pagination mode: return one page at a time with optional enrichment
           const result = await client.listSpacesPaginated({ pageSize, cursor, enrich });
           return sendJson(res, 200, {
             spaces: result.spaces,
@@ -491,7 +461,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
             pagination: result.pagination,
           });
         } else {
-          // Default: fetch ALL spaces (paginating internally)
           const spaces = await client.listSpacesEnriched({ pageSize, enrich });
           return sendJson(res, 200, {
             spaces,
@@ -505,13 +474,11 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         return sendJson(res, 200, user);
       }
 
-      // GET /api/debug/catchup - Debug endpoint to test catch_up_user API
       if (path === '/api/debug/catchup') {
         const spaces = await client.catchUpUser();
         return sendJson(res, 200, { count: spaces.length, spaces });
       }
 
-      // GET /api/spaces/:spaceId - Get a single space by ID (works for hidden/archived spaces)
       const singleSpaceMatch = path.match(/^\/api\/spaces\/([^/]+)$/);
       if (singleSpaceMatch && req.method === 'GET') {
         const spaceId = decodeURIComponent(singleSpaceMatch[1]);
@@ -523,17 +490,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         }
       }
 
-      // GET /api/spaces/:spaceId/topics - New endpoint with working server-side pagination
-      // ?pageSize=N - topics per page (default 30)
-      // ?sortTimeCursor=timestamp - sort_time cursor from previous page
-      // ?timestampCursor=timestamp - timestamp cursor from previous response
-      // ?anchorTimestamp=timestamp - anchor timestamp from first response
-      // ?since=timestamp - lower time boundary (microseconds, seconds, or ISO 8601)
-      // ?until=timestamp - upper time boundary (microseconds, seconds, or ISO 8601)
-      // ?all=true - auto-paginate to fetch all topics within time range
-      // ?maxPages=N - max pages to fetch when all=true (default 100)
-      // ?maxTopics=N - max topics to return
-      // ?maxMessages=N - max messages to return
       const topicsMatch = path.match(/^\/api\/spaces\/([^/]+)\/topics$/);
       if (topicsMatch && req.method === 'GET') {
         const spaceId = decodeURIComponent(topicsMatch[1]);
@@ -548,7 +504,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         const maxTopics = query.maxTopics ? parseInt(query.maxTopics, 10) : undefined;
         const maxMessages = query.maxMessages ? parseInt(query.maxMessages, 10) : undefined;
 
-        // If all=true or maxPages specified, use auto-pagination
         if (fetchAll || maxPages) {
           const result = await client.getAllTopicsWithServerPagination(spaceId, {
             pageSize,
@@ -561,7 +516,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
           return sendJson(res, 200, result);
         }
 
-        // Single page fetch
         const result = await client.fetchTopicsWithServerPagination(spaceId, {
           pageSize,
           sortTimeCursor,
@@ -573,23 +527,9 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         return sendJson(res, 200, result);
       }
 
-      // GET /api/spaces/:spaceId/messages - Get messages from a space (primary endpoint)
-      // GET /api/spaces/:spaceId/threads - Alias for /messages (backward compatibility)
-      // ?pageSize=N - messages per page (default 25)
-      // ?cursor=timestamp - pagination cursor (microseconds)
-      // ?until=timestamp - upper time boundary (epoch seconds, microseconds, or ISO 8601)
-      // ?since=timestamp - lower time boundary (epoch seconds, microseconds, or ISO 8601)
-      // ?full=true - fetch full thread contents
-      // ?format=messages|threaded - 'messages' (default) returns flat list of first messages only, 'threaded' returns topics with replies
-      // ?maxThreads=N - limit total threads returned
-      // ?maxMessages=N - limit total messages returned
-      // ?serverFilter=true|false - control server-side vs client-side filtering
-      // ?history=true - include messages from before user joined the group
-      // ?serverPagination=true - use new working server-side pagination
       const messagesOrThreadsMatch = path.match(/^\/api\/spaces\/([^/]+)\/(messages|threads)$/);
       if (messagesOrThreadsMatch && req.method === 'GET') {
         const spaceId = decodeURIComponent(messagesOrThreadsMatch[1]);
-        // Parse common options
         const pageSize = parseInt(query.pageSize || '25', 10);
         const fetchFullThreads = query.full === 'true';
         const since = query.since || undefined;
@@ -599,7 +539,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         const useServerFiltering = query.serverFilter === 'true' ? true : query.serverFilter === 'false' ? false : undefined;
         const includeHistory = query.history === 'true';
 
-        // If maxPages is specified, use getAllMessages for multi-page fetch (legacy behavior)
         if (query.maxPages) {
           const maxPages = parseInt(query.maxPages, 10);
           const result = await client.getAllMessages(spaceId, { 
@@ -614,7 +553,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
           });
           return sendJson(res, 200, result);
         }
-        // Otherwise use single-page getThreads with format support
         const cursor = query.cursor ? parseInt(query.cursor, 10) : undefined;
         const format = (query.format === 'messages' || query.format === 'threaded') ? query.format : undefined;
         const result = await client.getThreads(spaceId, { 
@@ -650,7 +588,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         return sendJson(res, result.success ? 200 : 500, result);
       }
 
-      // GET /api/spaces/:spaceId/threads/:topicId - Get single thread
       const threadMatch = path.match(/^\/api\/spaces\/([^/]+)\/threads\/([^/]+)$/);
       if (threadMatch && req.method === 'GET') {
         const spaceId = decodeURIComponent(threadMatch[1]);
@@ -662,7 +599,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         return sendJson(res, 200, result);
       }
 
-      // POST /api/spaces/:spaceId/messages - Send a new message (creates a new thread)
       const sendMessageMatch = path.match(/^\/api\/spaces\/([^/]+)\/messages$/);
       if (sendMessageMatch && req.method === 'POST') {
         const spaceId = decodeURIComponent(sendMessageMatch[1]);
@@ -681,7 +617,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
       }
 
       if (path === '/api/notifications') {
-        // Parse query parameters for filtering
         const filterMentions = query.mentions === 'true';
         const filterThreads = query.threads === 'true';
         const filterSpaces = query.spaces === 'true';
@@ -698,7 +633,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
 
         let { items } = await client.fetchWorldItems();
 
-        // For --me (direct mentions), find the "mentions-shortcut" channel first
         let mentionsShortcutId: string | undefined;
         if (filterMe && !filterSpace) {
           const mentionsSpaces = await client.findSpaces('mentions');
@@ -708,22 +642,18 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
           );
           if (mentionsShortcut) {
             mentionsShortcutId = mentionsShortcut.id;
-            // Pre-filter items to only the mentions-shortcut channel
             items = items.filter(i => i.id === mentionsShortcutId);
           }
         }
 
-        // Filter by specific space if requested
         if (filterSpace) {
           items = items.filter(i => i.id === filterSpace);
         }
 
-        // Get self user ID if needed for @me/@all filtering
         if (filterMe || filterAtAll) {
           await client.getSelfUser();
         }
 
-        // Categorize by notification type
         const directMentions = items.filter(i => i.notificationCategory === 'direct_mention');
         const subscribedThreads = items.filter(i => i.notificationCategory === 'subscribed_thread');
         const subscribedSpaces = items.filter(i => i.notificationCategory === 'subscribed_space');
@@ -732,7 +662,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         const unreads = items.filter(i => i.notificationCategory !== 'none');
         const dms = items.filter(i => i.type === 'dm');
 
-        // Determine which items to process
         const hasFilter = filterMentions || filterThreads || filterSpaces || filterDms || filterRead || filterMe || filterAtAll;
         let itemsToProcess: WorldItemSummary[] = [];
 
@@ -748,7 +677,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
           itemsToProcess = unreads;
         }
 
-        // Apply pagination
         const totalItems = itemsToProcess.length;
         if (offsetParam > 0) {
           itemsToProcess = itemsToProcess.slice(offsetParam);
@@ -757,12 +685,10 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
           itemsToProcess = itemsToProcess.slice(0, limitParam);
         }
 
-        // Track @me and @all filtered spaces
         const directMeMentions: WorldItemSummary[] = [];
         const atAllMentions: WorldItemSummary[] = [];
         const messages: Record<string, Message[]> = {};
 
-        // Fetch messages if needed (parallel)
         if (showMessages && itemsToProcess.length > 0) {
           for (let i = 0; i < itemsToProcess.length; i += parallelParam) {
             const batch = itemsToProcess.slice(i, i + parallelParam);
@@ -779,7 +705,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
                 if (result.messages.length > 0) {
                   messages[item.id] = result.messages;
 
-                  // Check for @me vs @all
                   if (filterMe || filterAtAll) {
                     let hasDirectMe = false;
                     let hasAtAll = false;
@@ -818,13 +743,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         });
       }
 
-      // GET /api/unreads - Categorized unread notifications for sidebar
-      // This endpoint provides properly categorized unreads with badges
-      // ?fetchMessages=true|false - Fetch message content for mention type detection (default: true)
-      // ?messagesPerSpace=N - Messages per space for mention detection (default: 5)
-      // ?checkParticipation=true|false - Check thread participation (slower, default: false)
-      // ?parallel=N - Parallel fetch limit (default: 5)
-      // ?refresh=true - Force fresh API call, bypassing stale cache
       if (path === '/api/unreads') {
         const fetchMessages = query.fetchMessages !== 'false';
         const messagesPerSpace = parseInt(query.messagesPerSpace as string || query['messages-per-space'] as string || '5', 10);
@@ -840,17 +758,12 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
           forceRefresh,
         });
 
-        // Return structured data for sidebar sections
         return sendJson(res, 200, {
-          // Badge counts for notification indicators
           badges: unreads.badges,
 
-          // Sidebar sections
           sections: {
-            // Unreads section - all unread items (excluding DMs which get their own section)
             unreads: unreads.subscribedSpaces.filter(s => s.type === 'space'),
 
-            // Mentions section - @mentions to you
             mentions: unreads.mentions.map(m => ({
               id: m.spaceId,
               name: m.spaceName,
@@ -861,7 +774,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
               timestamp: m.timestamp,
             })),
 
-            // Direct mentions (only @you, not @all)
             directMentions: unreads.directMentions.map(m => ({
               id: m.spaceId,
               name: m.spaceName,
@@ -871,7 +783,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
               timestamp: m.timestamp,
             })),
 
-            // Threads you're involved in
             threads: unreads.subscribedThreads.map(t => ({
               id: t.spaceId,
               name: t.spaceName,
@@ -883,7 +794,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
               isParticipant: t.isParticipant,
             })),
 
-            // Direct messages
             directMessages: unreads.directMessages.map(d => ({
               id: d.spaceId,
               name: d.spaceName,
@@ -892,7 +802,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
             })),
           },
 
-          // Raw data for advanced use
           raw: {
             mentions: unreads.mentions,
             directMentions: unreads.directMentions,
@@ -901,18 +810,14 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
             directMessages: unreads.directMessages,
           },
 
-          // Metadata
           selfUserId: unreads.selfUserId,
         });
       }
 
-      // GET /api/unreads/refresh - Force-fetch fresh unread counts (for polling badge counts)
-      // Always bypasses cache to get current unread state
       if (path === '/api/unreads/refresh') {
         const { items } = await client.fetchWorldItems({ forceRefresh: true });
         const unreads = items.filter(i => i.unreadCount > 0 || i.unreadReplyCount > 0);
 
-        // Calculate summary counts
         const dmUnreads = unreads.filter(i => i.type === 'dm');
         const spaceUnreads = unreads.filter(i => i.type === 'space');
 
@@ -929,8 +834,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         });
       }
 
-      // POST /api/mark-read/:id - Mark a space or DM as read
-      // Body: { type: 'space' | 'dm', unreadCount?: number }
       const markReadMatch = path.match(/^\/api\/mark-read\/([^/]+)$/);
       if (markReadMatch && req.method === 'POST') {
         const groupId = decodeURIComponent(markReadMatch[1]);
@@ -938,7 +841,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         try {
           body = await readJsonBody(req);
         } catch {
-          // Body is optional
         }
         const unreadCount = typeof body.unreadCount === 'number' ? body.unreadCount : undefined;
 
@@ -958,14 +860,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         return sendJson(res, 200, { matches, count: matches.length });
       }
 
-      // GET /api/server-search - Server-side search across all spaces/DMs
-      // Uses Google's search API (SBNmJb RPC via batchexecute)
-      // Query params:
-      //   q (required) - Search query
-      //   maxPages - Max pages to fetch (default: 1)
-      //   pageSize - Results per page (default: 55)
-      //   cursor - Pagination cursor from previous response
-      //   sessionId - Session ID for pagination continuity
       if (path === '/api/server-search' && query.q) {
         const searchOptions = {
           maxPages: query.maxPages ? parseInt(query.maxPages as string, 10) : 1,
@@ -984,19 +878,11 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         });
       }
 
-      // GET /api/find-spaces - Find spaces by name
       if (path === '/api/find-spaces' && query.q) {
         const matches = await client.findSpaces(query.q);
         return sendJson(res, 200, { spaces: matches, count: matches.length });
       }
 
-      // GET /api/dms - List DM conversations
-      // ?messages=false (default) - lightweight, no messages
-      // ?messages=true - include messages (slower)
-      // ?limit=N - max DMs to return (default 50)
-      // ?offset=N - skip first N DMs (for pagination)
-      // ?messagesLimit=N - messages per DM when messages=true (default 10)
-      // ?refresh=true - Force fresh API call, bypassing stale cache
       if (path === '/api/dms') {
         const limit = parseInt(query.limit as string || '50', 10);
         const offset = parseInt(query.offset as string || '0', 10);
@@ -1019,9 +905,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         return sendJson(res, 200, result);
       }
 
-      // GET /api/dms/presence - Get presence for DM users (sidebar online status)
-      // NOTE: This must come BEFORE /api/dms/:dmId to avoid route conflict
-      // ?dmIds=id1,id2,... - Comma-separated list of DM IDs
       if (path === '/api/dms/presence') {
         const dmIdsParam = query.dmIds as string;
         if (!dmIdsParam) {
@@ -1035,12 +918,10 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         const parallelRaw = parseInt((query.parallel as string) || '5', 10);
         const parallel = Number.isFinite(parallelRaw) && parallelRaw > 0 ? parallelRaw : 5;
 
-        // For each DM, get the other user's ID by fetching one message
         const dmToUser: Map<string, string> = new Map();
         const selfUser = await client.getSelfUser();
         const selfUserId = selfUser?.userId;
 
-        // Fetch messages from each DM to find the other user's ID (parallel, batched)
         const dmIdsToProcess = Array.from(new Set(dmIds));
         for (let i = 0; i < dmIdsToProcess.length; i += parallel) {
           const batch = dmIdsToProcess.slice(i, i + parallel);
@@ -1048,8 +929,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
             try {
               const result = await client.getThreads(dmId, { pageSize: 3, isDm: true });
               for (const msg of result.messages) {
-                // Find a message from someone other than self (numeric user ID)
-                // Try both sender and sender_id fields
                 const senderId = msg.sender_id || msg.sender;
                 if (senderId && senderId !== selfUserId && /^\d+$/.test(senderId)) {
                   dmToUser.set(dmId, senderId);
@@ -1057,19 +936,16 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
                 }
               }
             } catch {
-              // Ignore errors for individual DMs
             }
           }));
         }
 
-        // Get unique user IDs and fetch presence with profile (includes name)
         const userIds = Array.from(new Set(dmToUser.values()));
         const presences: Array<UserPresenceWithProfile & { dmId: string }> = [];
 
         if (userIds.length > 0) {
           try {
             const result = await client.getUserPresenceWithProfile(userIds);
-            // Map presence back to DM IDs
             for (const [dmId, userId] of dmToUser.entries()) {
               const presence = result.presences.find(p => p.userId === userId);
               if (presence) {
@@ -1077,7 +953,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
               }
             }
           } catch {
-            // Ignore presence fetch errors
           }
         }
 
@@ -1087,11 +962,9 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         });
       }
 
-      // GET /api/dms/:dmId - Get DM info (placeholder for now)
       const dmInfoMatch = path.match(/^\/api\/dms\/([^/]+)$/);
       if (dmInfoMatch && !path.includes('/threads')) {
         const dmId = decodeURIComponent(dmInfoMatch[1]);
-        // Return basic info - could be enhanced with get_group API
         const { dms } = await client.listDMs({ limit: 0 });
         const dm = dms.find(d => d.id === dmId);
         if (!dm) {
@@ -1100,24 +973,12 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         return sendJson(res, 200, dm);
       }
 
-      // GET /api/dms/:dmId/messages - Get messages from a specific DM (primary endpoint)
-      // GET /api/dms/:dmId/threads or /api/dms/:dmId/topics - Aliases (backward compatibility)
-      // ?pageSize=N - messages per page (default 25)
-      // ?repliesPerTopic=N - replies per thread (default 10)
-      // ?cursor=timestamp - pagination cursor (microseconds)
-      // ?until=timestamp - upper time boundary (epoch seconds, microseconds, or ISO 8601)
-      // ?since=timestamp - lower time boundary (epoch seconds, microseconds, or ISO 8601)
-      // ?format=messages|threaded - 'messages' (default) returns flat list of first messages only, 'threaded' returns topics with replies
-      // ?maxThreads=N - limit total threads returned
-      // ?maxMessages=N - limit total messages returned
-      // ?serverFilter=true|false - control server-side vs client-side filtering
       const dmThreadsMatch = path.match(/^\/api\/dms\/([^/]+)\/(messages|threads|topics)$/);
       if (dmThreadsMatch && req.method === 'GET') {
         const dmId = decodeURIComponent(dmThreadsMatch[1]);
         const pageSize = parseInt(query.pageSize as string || '25', 10);
         const repliesPerTopic = parseInt(query.repliesPerTopic as string || '10', 10);
         const cursor = query.cursor ? parseInt(query.cursor as string, 10) : undefined;
-        // Pass raw values - client.getDMThreads() handles parsing of numbers and ISO strings
         const until = (query.until as string) || undefined;
         const since = (query.since as string) || undefined;
         const fetchFullThreads = query.fullThreads === 'true';
@@ -1145,7 +1006,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         });
       }
 
-      // GET /api/dms/:dmId/threads/:topicId - Get single thread from DM
       const dmSingleThreadMatch = path.match(/^\/api\/dms\/([^/]+)\/threads\/([^/]+)$/);
       if (dmSingleThreadMatch && req.method === 'GET') {
         const dmId = decodeURIComponent(dmSingleThreadMatch[1]);
@@ -1155,7 +1015,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         return sendJson(res, 200, result);
       }
 
-      // POST /api/dms/:dmId/threads/:topicId/replies - Reply in a DM thread
       const dmReplyMatch = path.match(/^\/api\/dms\/([^/]+)\/threads\/([^/]+)\/replies$/);
       if (dmReplyMatch && req.method === 'POST') {
         const dmId = decodeURIComponent(dmReplyMatch[1]);
@@ -1174,7 +1033,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         return sendJson(res, result.success ? 200 : 500, result);
       }
 
-      // POST /api/dms/:dmId/messages - Send a message to a DM
       const dmMessagesMatch = path.match(/^\/api\/dms\/([^/]+)\/messages$/);
       if (dmMessagesMatch && req.method === 'POST') {
         const dmId = decodeURIComponent(dmMessagesMatch[1]);
@@ -1188,15 +1046,10 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         if (!text) {
           return sendJson(res, 400, { success: false, error: 'Message text required' });
         }
-        // sendMessage works for both spaces and DMs - the ID format determines the type
         const result = await client.sendMessage(dmId, text);
         return sendJson(res, result.success ? 200 : 500, result);
       }
 
-      // GET /api/presence - Get user presence/online status
-      // ?userIds=id1,id2,id3 - Comma-separated list of user IDs
-      // ?include=profile - Also include user profile info (name, email, avatar)
-      // ?debug=true - Return raw API response for debugging
       if (path === '/api/presence') {
         const userIdsParam = query.userIds as string || '';
         if (!userIdsParam) {
@@ -1210,13 +1063,11 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
           return sendJson(res, 400, { error: 'Maximum 100 user IDs per request' });
         }
 
-        // Debug mode: return raw API response
         if (query.debug === 'true') {
           const result = await client.getUserPresenceRaw(userIds);
           return sendJson(res, 200, result);
         }
 
-        // Check if profile data should be included
         const includeProfile = query.include === 'profile';
 
         if (includeProfile) {
@@ -1228,7 +1079,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         }
       }
 
-      // GET /api/presence/:userId - Get presence for a single user
       const presenceMatch = path.match(/^\/api\/presence\/([^/]+)$/);
       if (presenceMatch) {
         const userId = decodeURIComponent(presenceMatch[1]);
@@ -1239,8 +1089,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         return sendJson(res, 200, presence);
       }
 
-      // Attachment URL resolver endpoint
-      // GET /api/attachment?token=... - Resolves attachment token to signed URL and proxies content
       if (path === '/api/attachment' && query.token) {
         try {
           const token = decodeURIComponent(query.token);
@@ -1249,7 +1097,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
             return sendJson(res, 404, { error: 'Could not resolve attachment URL' });
           }
 
-          // Proxy the actual file
           const proxyRes = await client.proxyFetch(signedUrl);
           if (!proxyRes.ok) {
             return sendJson(res, proxyRes.status, { error: 'Failed to fetch attachment: ' + proxyRes.status });
@@ -1272,12 +1119,9 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         }
       }
 
-      // Proxy endpoint for fetching images/attachments with authentication
-      // GET /api/proxy?url=... - Proxies the request with auth cookies
       if (path === '/api/proxy' && query.url) {
         try {
           const targetUrl = decodeURIComponent(query.url);
-          // Only allow Google domains for security
           const urlObj = new URL(targetUrl);
           if (!urlObj.hostname.endsWith('google.com') && !urlObj.hostname.endsWith('googleusercontent.com') && !urlObj.hostname.endsWith('ggpht.com')) {
             return sendJson(res, 403, { error: 'Only Google domains allowed' });
@@ -1305,18 +1149,15 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         }
       }
 
-      // Health check
       if (path === '/health') {
         return sendJson(res, 200, { status: 'ok', timestamp: new Date().toISOString() });
       }
 
-      // GET /api/favorites - List all favorites
       if (path === '/api/favorites' && req.method === 'GET') {
         const favorites = getFavorites();
         return sendJson(res, 200, { favorites, count: favorites.length });
       }
 
-      // POST /api/favorites/:id - Add a favorite
       const addFavoriteMatch = path.match(/^\/api\/favorites\/([^/]+)$/);
       if (addFavoriteMatch && req.method === 'POST') {
         const id = decodeURIComponent(addFavoriteMatch[1]);
@@ -1329,15 +1170,12 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         return sendJson(res, 200, { success: true, favorite });
       }
 
-      // DELETE /api/favorites/:id - Remove a favorite
       if (addFavoriteMatch && req.method === 'DELETE') {
         const id = decodeURIComponent(addFavoriteMatch[1]);
         const removed = removeFavorite(id);
         return sendJson(res, 200, { success: removed, id });
       }
 
-      // GET /api/last-viewed - Get last viewed channel (for UI restore)
-      // PUT /api/last-viewed - Set last viewed channel
       if ((path === '/api/last-viewed' || path === '/api/metadata/last-viewed') && req.method === 'GET') {
         const lastViewed = getLastViewed();
         return sendJson(res, 200, { lastViewed });
@@ -1358,13 +1196,11 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         return sendJson(res, 200, { success: true, lastViewed });
       }
 
-      // GET /api/hidden - List all hidden spaces
       if (path === '/api/hidden' && req.method === 'GET') {
         const hidden = getHidden();
         return sendJson(res, 200, { hidden, count: hidden.length });
       }
 
-      // POST /api/hidden/:id - Hide a space
       const addHiddenMatch = path.match(/^\/api\/hidden\/([^/]+)$/);
       if (addHiddenMatch && req.method === 'POST') {
         const id = decodeURIComponent(addHiddenMatch[1]);
@@ -1377,7 +1213,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
         return sendJson(res, 200, { success: true, hidden });
       }
 
-      // DELETE /api/hidden/:id - Unhide a space
       if (addHiddenMatch && req.method === 'DELETE') {
         const id = decodeURIComponent(addHiddenMatch[1]);
         const removed = removeHidden(id);
@@ -1391,11 +1226,9 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
     }
   });
 
-  // Initialize WebSocket manager
   wsManager = new WebSocketManager();
   wsManager.attach(server);
 
-  // Graceful shutdown for hot-reload support
   const shutdown = () => {
     log.server.info('Shutting down server...');
     chatChannel?.disconnect();
@@ -1403,7 +1236,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
       log.server.info('Server closed');
       process.exit(0);
     });
-    // Force close after 1 second
     setTimeout(() => process.exit(0), 1000);
   };
 
@@ -1411,7 +1243,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
   process.on('SIGTERM', shutdown);
   process.on('SIGHUP', shutdown);
 
-  // Retry logic for port in use (helps with hot-reload)
   const startServer = (retriesLeft = 5) => {
     server.once('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE' && retriesLeft > 0) {
@@ -1447,7 +1278,6 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
     log.server.info('  GET  /health                         - Health check');
     log.server.info('Press Ctrl+C to stop');
 
-    // Initialize real-time channel after server is running
     initChannel(cookieString, client).catch(err => {
       log.channel.error('Init error:', err.message);
     });
@@ -1457,4 +1287,3 @@ export async function startApiServer(options: StartApiServerOptions = {}): Promi
   startServer();
 }
 
-// =========================================================================

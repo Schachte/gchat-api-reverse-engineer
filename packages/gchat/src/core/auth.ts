@@ -1,10 +1,3 @@
-/**
- * Google Chat Authentication
- *
- * Authenticates with Google Chat using cookie-based authentication.
- * Can extract cookies directly from Chrome browser or use provided cookies.
- * Extracts XSRF token from /mole/world endpoint.
- */
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -35,7 +28,6 @@ const GET_COOKIE_CLI = (() => {
 const CACHED_COOKIES_FILE = 'cached_cookies.json';
 const CACHED_AUTH_FILE = 'cached_auth.json';
 
-// In-memory caches
 let memoryCookies: Cookies | null = null;
 let memoryAuth: AuthCache | null = null;
 
@@ -47,14 +39,14 @@ export interface AuthCache {
   xsrf_token: string;
   mole_world_body: string;
   cached_at: number;
-  session_id?: string;  // f.sid for batchexecute requests
+  session_id?: string;  
 }
 
 export interface AuthResult {
   cookies: Cookies;
   xsrfToken: string;
   cookieString: string;
-  sessionId?: string;  // f.sid for batchexecute requests
+  sessionId?: string;  
 }
 
 function parseCookiesTxt(content: string): Cookies | null {
@@ -165,7 +157,6 @@ function loadCookiesFromGetCookie(): Cookies | null {
       const domain = row.domain || '';
 
       if (row.name === 'OSID') {
-        // Only use chat.google.com OSID - other domain OSIDs won't work
         if (domain === 'chat.google.com') {
           cookies[row.name] = row.value;
         }
@@ -189,39 +180,31 @@ function loadCookiesFromGetCookie(): Cookies | null {
   }
 }
 
-/**
- * Load cookies - tries cookies.txt, cache, get-cookie CLI, then browser extraction
- */
 export function loadCachedCookies(cacheDir: string = '.'): Cookies | null {
   const required = ['SID', 'HSID', 'SSID', 'OSID'];
 
-  // 1. Try reading cookies.txt (manual cookie header)
   const txtCookies = loadCookiesFromTxt();
   if (txtCookies) {
     memoryCookies = txtCookies;
     return txtCookies;
   }
 
-  // 2. Check in-memory cache
   if (memoryCookies && required.every(name => name in memoryCookies!)) {
     return memoryCookies;
   }
 
-  // 3. Try loading from file
   const cachePath = path.join(cacheDir, CACHED_COOKIES_FILE);
   try {
     if (fs.existsSync(cachePath)) {
       const data = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
       if (required.every(name => name in data)) {
-        memoryCookies = data; // Cache in memory
+        memoryCookies = data; 
         return data;
       }
     }
   } catch {
-    // Cache invalid
   }
 
-  // 4. Try native browser extraction (most reliable)
   const browserCookies = tryExtractCookiesFromBrowser();
   if (browserCookies && required.every(name => name in browserCookies)) {
     memoryCookies = browserCookies;
@@ -229,7 +212,6 @@ export function loadCachedCookies(cacheDir: string = '.'): Cookies | null {
     return browserCookies;
   }
 
-  // 5. Try @mherod/get-cookie CLI as fallback
   const cliCookies = loadCookiesFromGetCookie();
   if (cliCookies && required.every(name => name in cliCookies)) {
     memoryCookies = cliCookies;
@@ -240,27 +222,17 @@ export function loadCachedCookies(cacheDir: string = '.'): Cookies | null {
   return null;
 }
 
-/**
- * Save cookies to memory (and optionally to file)
- */
 export function saveCachedCookies(cookies: Cookies, cacheDir: string = '.'): void {
-  // Always save to memory
   memoryCookies = cookies;
 
-  // Optionally save to file (for persistence across restarts)
   const cachePath = path.join(cacheDir, CACHED_COOKIES_FILE);
   try {
     fs.writeFileSync(cachePath, JSON.stringify(cookies, null, 2));
   } catch {
-    // Non-fatal - we have it in memory
   }
 }
 
-/**
- * Load auth cache (XSRF token) - tries memory first, then file
- */
 export function loadAuthCache(cacheDir: string = '.'): AuthCache | null {
-  // 1. Check in-memory cache first
   if (memoryAuth && memoryAuth.xsrf_token && memoryAuth.cached_at) {
     const ageHours = (Date.now() - memoryAuth.cached_at) / 3600000;
     if (ageHours < 24) {
@@ -268,7 +240,6 @@ export function loadAuthCache(cacheDir: string = '.'): AuthCache | null {
     }
   }
 
-  // 2. Try loading from file
   const cachePath = path.join(cacheDir, CACHED_AUTH_FILE);
   try {
     if (fs.existsSync(cachePath)) {
@@ -277,21 +248,17 @@ export function loadAuthCache(cacheDir: string = '.'): AuthCache | null {
       if (data.xsrf_token && data.cached_at) {
         const ageHours = (Date.now() - data.cached_at) / 3600000;
         if (ageHours < 24) {
-          memoryAuth = data; // Cache in memory
+          memoryAuth = data; 
           return data;
         }
       }
     }
   } catch {
-    // Cache invalid
   }
 
   return null;
 }
 
-/**
- * Save auth cache to memory (and optionally to file)
- */
 export function saveAuthCache(xsrfToken: string, moleWorldBody: string, cacheDir: string = '.', sessionId?: string): void {
   const data: AuthCache = {
     xsrf_token: xsrfToken,
@@ -300,11 +267,9 @@ export function saveAuthCache(xsrfToken: string, moleWorldBody: string, cacheDir
     session_id: sessionId,
   };
 
-  // Always save to memory
   memoryAuth = data;
   log.auth.debug('Saved XSRF token to memory cache');
 
-  // Optionally save to file
   const cachePath = path.join(cacheDir, CACHED_AUTH_FILE);
   try {
     fs.writeFileSync(cachePath, JSON.stringify(data, null, 2));
@@ -314,9 +279,6 @@ export function saveAuthCache(xsrfToken: string, moleWorldBody: string, cacheDir
   }
 }
 
-/**
- * Invalidate cookie cache (memory and file)
- */
 export function invalidateCookieCache(cacheDir: string = '.'): void {
   memoryCookies = null;
   log.auth.debug('Cleared cookie memory cache');
@@ -332,9 +294,6 @@ export function invalidateCookieCache(cacheDir: string = '.'): void {
   }
 }
 
-/**
- * Invalidate auth cache (memory and file)
- */
 export function invalidateAuthCache(cacheDir: string = '.'): void {
   memoryAuth = null;
   log.auth.debug('Cleared auth memory cache');
@@ -350,14 +309,9 @@ export function invalidateAuthCache(cacheDir: string = '.'): void {
   }
 }
 
-/**
- * Build cookie header string from cookies object
- * Filters out any cookies with invalid characters for HTTP headers
- */
 export function buildCookieString(cookies: Cookies): string {
   return Object.entries(cookies)
     .filter(([_, v]) => {
-      // Filter out cookies with non-ASCII characters
       for (let i = 0; i < v.length; i++) {
         if (v.charCodeAt(i) > 127) {
           return false;
@@ -369,9 +323,6 @@ export function buildCookieString(cookies: Cookies): string {
     .join('; ');
 }
 
-/**
- * Fetch XSRF token from /mole/world endpoint
- */
 export async function fetchXsrfToken(cookies: Cookies): Promise<{ xsrfToken: string; body: string; sessionId: string | null }> {
   const cookieString = buildCookieString(cookies);
 
@@ -404,7 +355,6 @@ export async function fetchXsrfToken(cookies: Cookies): Promise<{ xsrfToken: str
 
   const body = await response.text();
 
-  // Extract WIZ_global_data from response
   const wizMatch = body.match(/>window\.WIZ_global_data = ({.+?});<\/script>/s);
   if (!wizMatch) {
     throw new Error('No WIZ_global_data found in response');
@@ -421,19 +371,11 @@ export async function fetchXsrfToken(cookies: Cookies): Promise<{ xsrfToken: str
     throw new Error('No XSRF token in response');
   }
 
-  // FdrFJe is the session ID (f.sid) used in batchexecute requests
   const sessionId = wizData.FdrFJe || null;
 
   return { xsrfToken, body, sessionId };
 }
 
-/**
- * Authenticate with Google Chat
- *
- * @param cookies - Cookies object with Google auth cookies
- * @param options - Authentication options
- * @returns Authentication result with XSRF token
- */
 export async function authenticate(
   cookies: Cookies,
   options: {
@@ -443,7 +385,6 @@ export async function authenticate(
 ): Promise<AuthResult> {
   const { forceRefresh = false, cacheDir = '.' } = options;
 
-  // Try cached auth first
   if (!forceRefresh) {
     const cached = loadAuthCache(cacheDir);
     if (cached) {
@@ -460,7 +401,6 @@ export async function authenticate(
   log.auth.info('Fetching XSRF token from /mole/world...');
   const { xsrfToken, body, sessionId } = await fetchXsrfToken(cookies);
 
-  // Cache the auth data (including sessionId for batchexecute calls)
   saveAuthCache(xsrfToken, body, cacheDir, sessionId || undefined);
 
   log.auth.info('Authentication successful');
@@ -473,9 +413,6 @@ export async function authenticate(
   };
 }
 
-/**
- * Full authentication flow with cookie loading
- */
 export async function authenticateWithCookies(options: {
   cookies?: Cookies;
   forceRefresh?: boolean;
@@ -484,7 +421,6 @@ export async function authenticateWithCookies(options: {
   const { forceRefresh = false, cacheDir = '.' } = options;
   let cookies = options.cookies;
 
-  // Load cookies from cache if not provided
   if (!cookies) {
     if (forceRefresh) {
       invalidateCookieCache(cacheDir);
@@ -504,7 +440,6 @@ export async function authenticateWithCookies(options: {
     log.auth.debug(`Loaded ${Object.keys(cookies).length} cookies from cache`);
   }
 
-  // Validate required cookies
   const required = ['SID', 'HSID', 'SSID', 'OSID'];
   const missing = required.filter(name => !(name in cookies!));
 
@@ -514,10 +449,6 @@ export async function authenticateWithCookies(options: {
 
   return authenticate(cookies, { forceRefresh, cacheDir });
 }
-
-// =========================================================================
-// Browser extraction re-export
-// =========================================================================
 
 export {
   extractCookiesFromBrowser,
@@ -538,7 +469,6 @@ export {
   type CookieWithDomain,
 } from './extract-cookies.js';
 
-// Debug flag
 let debugMode = false;
 
 export function setDebugMode(enabled: boolean): void {
@@ -549,14 +479,9 @@ export function isDebugMode(): boolean {
   return debugMode;
 }
 
-/**
- * Get cookies - uses cookies.txt, get-cookie CLI, or browser extraction as needed
- * This is the primary method for getting cookies automatically
- */
 export function getCookies(): Cookies {
   const required = ['SID', 'HSID', 'SSID', 'OSID'];
 
-  // 1. Try cookies.txt
   const txtCookies = loadCookiesFromTxt();
   if (txtCookies) {
     log.auth.debug('Using cookies from cookies.txt');
@@ -564,13 +489,11 @@ export function getCookies(): Cookies {
     return txtCookies;
   }
 
-  // 2. Check memory cache
   if (memoryCookies && required.every(name => name in memoryCookies!)) {
     log.auth.debug('Using cached cookies from memory');
     return memoryCookies;
   }
 
-  // 3. Try native browser extraction (most reliable)
   const browserCookies = extractFromBrowser(debugMode);
   if (browserCookies && required.every(name => name in browserCookies)) {
     log.auth.debug('Using cookies from Chrome browser');
@@ -578,7 +501,6 @@ export function getCookies(): Cookies {
     return browserCookies;
   }
 
-  // 4. Try @mherod/get-cookie CLI as fallback
   const cliCookies = loadCookiesFromGetCookie();
   if (cliCookies && required.every(name => name in cliCookies)) {
     log.auth.debug('Using cookies from @mherod/get-cookie');
@@ -591,38 +513,21 @@ export function getCookies(): Cookies {
   );
 }
 
-// =========================================================================
-// Aliases for backwards compatibility with existing code
-// =========================================================================
-
-/** Alias for loadAuthCache */
 export const loadCachedAuth = loadAuthCache;
 
-/** Alias for saveAuthCache */
 export const saveCachedAuth = saveAuthCache;
 
-/** Alias for buildCookieString */
 export const formatCookieHeader = buildCookieString;
 
-/**
- * Invalidate all caches (cookies and auth)
- */
 export function invalidateCache(cacheDir: string = '.'): void {
   invalidateCookieCache(cacheDir);
   invalidateAuthCache(cacheDir);
 }
 
-/**
- * Extract SAPISID cookie value from cookies object
- */
 export function extractSAPISID(cookies: Cookies): string | null {
   return cookies.SAPISID || cookies.__Secure_1PAPISID || null;
 }
 
-/**
- * Generate SAPISIDHASH for authorization header
- * Format: SAPISIDHASH timestamp_sapisid-hash
- */
 export async function generateSAPISIDHash(
   sapisid: string,
   origin: string = 'https://chat.google.com'
@@ -630,7 +535,6 @@ export async function generateSAPISIDHash(
   const timestamp = Math.floor(Date.now() / 1000);
   const input = `${timestamp} ${sapisid} ${origin}`;
 
-  // Use Web Crypto API (available in Node 18+)
   const encoder = new TextEncoder();
   const data = encoder.encode(input);
   const hashBuffer = await crypto.subtle.digest('SHA-1', data);
@@ -640,13 +544,6 @@ export async function generateSAPISIDHash(
   return `SAPISIDHASH ${timestamp}_${hashHex}`;
 }
 
-/**
- * Generate a SHA-1 hash for a SAPISID-style cookie
- * @param timestamp Unix timestamp
- * @param sapisid The cookie value
- * @param origin The origin URL
- * @returns The hex hash string
- */
 async function generateSapisidStyleHash(
   timestamp: number,
   sapisid: string,
@@ -660,13 +557,6 @@ async function generateSapisidStyleHash(
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * Generate multi-hash Authorization header for People API
- * The People API requires multiple SAPISID-style hashes (SAPISIDHASH, SAPISID1PHASH, SAPISID3PHASH)
- * @param cookies The cookies object containing SAPISID, __Secure-1PAPISID, __Secure-3PAPISID
- * @param origin The origin URL (default: https://people-pa.clients6.google.com)
- * @returns The combined authorization header string, or null if required cookies are missing
- */
 export async function generatePeopleApiAuthHeader(
   cookies: Cookies,
   origin: string = 'https://people-pa.clients6.google.com'
@@ -674,7 +564,6 @@ export async function generatePeopleApiAuthHeader(
   const timestamp = Math.floor(Date.now() / 1000);
   const parts: string[] = [];
 
-  // Helper to find a cookie by trying multiple name variations
   const findCookie = (names: string[]): string | undefined => {
     for (const name of names) {
       if (cookies[name]) return cookies[name];
@@ -682,7 +571,6 @@ export async function generatePeopleApiAuthHeader(
     return undefined;
   };
 
-  // Debug: log available cookie keys (not values for security)
   const cookieKeys = Object.keys(cookies);
   const relevantCookies = cookieKeys.filter(k =>
     k.includes('APISID') || k.includes('PSID') || k.includes('SID')
@@ -690,7 +578,6 @@ export async function generatePeopleApiAuthHeader(
   log.auth.debug('generatePeopleApiAuthHeader: Available SID cookies:', relevantCookies.join(', '));
   log.auth.debug('generatePeopleApiAuthHeader: Using origin:', origin);
 
-  // SAPISIDHASH from SAPISID cookie
   const sapisid = findCookie(['SAPISID']);
   if (sapisid) {
     const hash = await generateSapisidStyleHash(timestamp, sapisid, origin);
@@ -698,11 +585,10 @@ export async function generatePeopleApiAuthHeader(
     log.auth.debug('generatePeopleApiAuthHeader: Added SAPISIDHASH');
   }
 
-  // SAPISID1PHASH from __Secure-1PAPISID cookie (try multiple name formats)
   const secure1p = findCookie([
     '__Secure-1PAPISID',
     '__Secure_1PAPISID',
-    '__Secure-1PSID',  // Some versions might not have the 'A'
+    '__Secure-1PSID',  
   ]);
   if (secure1p) {
     const hash = await generateSapisidStyleHash(timestamp, secure1p, origin);
@@ -710,11 +596,10 @@ export async function generatePeopleApiAuthHeader(
     log.auth.debug('generatePeopleApiAuthHeader: Added SAPISID1PHASH');
   }
 
-  // SAPISID3PHASH from __Secure-3PAPISID cookie (try multiple name formats)
   const secure3p = findCookie([
     '__Secure-3PAPISID',
     '__Secure_3PAPISID',
-    '__Secure-3PSID',  // Some versions might not have the 'A'
+    '__Secure-3PSID',  
   ]);
   if (secure3p) {
     const hash = await generateSapisidStyleHash(timestamp, secure3p, origin);
@@ -730,18 +615,10 @@ export async function generatePeopleApiAuthHeader(
   return parts.join(' ');
 }
 
-// =========================================================================
-// CLI
-// =========================================================================
-
-/**
- * CLI entry point - can also be called programmatically
- */
 export async function main() {
   const args = process.argv.slice(2);
   const forceRefresh = args.includes('--refresh') || args.includes('-r');
 
-  // Use parent directory for cache files (where the Python script stores them)
   const cacheDir = path.resolve(MODULE_DIR, '../..');
 
   try {
@@ -758,7 +635,6 @@ export async function main() {
   }
 }
 
-// Run if executed directly
 const isMainModule = import.meta.url === `file://${process.argv[1]}`;
 if (isMainModule) {
   main();

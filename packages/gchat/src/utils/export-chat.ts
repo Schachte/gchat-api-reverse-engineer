@@ -15,10 +15,6 @@ export interface ExportChatBatchOptions {
   isDm?: boolean;
   maxPages?: number;
   cursors?: ExportChatCursors;
-  /**
-   * Expand each topic by fetching the full thread via list_messages.
-   * This is slower, but avoids truncated long threads.
-   */
   fullThreads?: boolean;
   threadPageSize?: number;
   signal?: AbortSignal;
@@ -40,12 +36,6 @@ export type ExportChatBatchResult = {
   cursors: ExportChatCursors;
 };
 
-/**
- * Iterate topics/messages for a space (or DM) in batches within an optional time range.
- *
- * This uses the JSON/PBLite list_topics format (via fetchTopicsWithServerPagination),
- * which supports real cursor-based pagination for large spaces.
- */
 export async function* exportChatBatches(
   client: GoogleChatClient,
   groupId: string,
@@ -90,12 +80,10 @@ export async function* exportChatBatches(
       isDm,
     });
 
-    // Save anchor from first response (needs to remain constant across pages)
     if (!anchorTimestamp && result.pagination.anchor_timestamp) {
       anchorTimestamp = result.pagination.anchor_timestamp;
     }
 
-    // Optionally expand threads to fetch all replies
     if (fullThreads && result.topics.length > 0) {
       for (const topic of result.topics) {
         throwIfAborted(signal);
@@ -107,12 +95,10 @@ export async function* exportChatBatches(
             topic.has_more_replies = false;
           }
         } catch {
-          // Keep the embedded replies if full fetch fails
         }
       }
     }
 
-    // Rebuild messages from topics so `messages` stays consistent with any expansions.
     const messages: Message[] = [];
     for (const topic of result.topics) {
       messages.push(...topic.replies);

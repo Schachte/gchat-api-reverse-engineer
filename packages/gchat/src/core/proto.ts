@@ -1,12 +1,8 @@
-/**
- * Protobuf encoding for Google Chat API requests
- */
 
 import protobuf from 'protobufjs';
 
 let root: protobuf.Root | null = null;
 
-// Inline protobuf schema
 const PROTO_SCHEMA = `
 syntax = "proto3";
 
@@ -265,18 +261,12 @@ message CatchUpGroupRequest {
 }
 `;
 
-/**
- * Load protobuf definitions from inline schema
- */
 export function loadProto(): protobuf.Root {
   if (root) return root;
   root = protobuf.parse(PROTO_SCHEMA).root;
   return root;
 }
 
-/**
- * Create a RequestHeader message (using camelCase for protobufjs)
- */
 export function createRequestHeader(): {
   clientType: number;
   locale: string;
@@ -284,18 +274,15 @@ export function createRequestHeader(): {
   clientFeatureCapabilities: { spamRoomInvitesLevel: number };
 } {
   return {
-    clientType: 3,  // WEB
+    clientType: 3,  
     locale: 'en',
     clientVersion: 2440378181258,
     clientFeatureCapabilities: {
-      spamRoomInvitesLevel: 2,  // FULLY_SUPPORTED
+      spamRoomInvitesLevel: 2,  
     },
   };
 }
 
-/**
- * World section types from the Google Chat API
- */
 export enum WorldSectionType {
   WORLD_SECTION_TYPE_UNSPECIFIED = 0,
   STARRED_DIRECT_MESSAGE_PEOPLE = 1,
@@ -321,9 +308,6 @@ export enum UserType {
   BOT = 1,
 }
 
-/**
- * User presence status
- */
 export enum Presence {
   UNDEFINED_PRESENCE = 0,
   ACTIVE = 1,
@@ -332,25 +316,16 @@ export enum Presence {
   SHARING_DISABLED = 4,
 }
 
-/**
- * Do Not Disturb state
- */
 export enum DndState {
   DND_STATE_UNKNOWN = 0,
   AVAILABLE = 1,
   DND = 2,
 }
 
-/**
- * Encode a PaginatedWorldRequest
- * @param pageSize - Number of items per section (default 100)
- * @param cursor - Optional anchor_sort_timestamp_micros for pagination
- */
 export function encodePaginatedWorldRequest(pageSize = 100, cursor?: number): Uint8Array {
   const root = loadProto();
   const PaginatedWorldRequest = root.lookupType('PaginatedWorldRequest');
 
-  // Build world section requests with optional cursor for pagination
   const buildSectionRequest = (sectionType: WorldSectionType) => {
     const request: Record<string, unknown> = {
       pageSize: pageSize,
@@ -365,14 +340,11 @@ export function encodePaginatedWorldRequest(pageSize = 100, cursor?: number): Ui
   const message = PaginatedWorldRequest.create({
     requestHeader: createRequestHeader(),
     worldSectionRequests: [
-      // Main space/room sections
       buildSectionRequest(WorldSectionType.ALL_ROOMS),
       buildSectionRequest(WorldSectionType.STARRED_ROOMS),
       buildSectionRequest(WorldSectionType.NON_STARRED_ROOMS),
-      // DM sections
       buildSectionRequest(WorldSectionType.ALL_DIRECT_MESSAGE_PEOPLE),
       buildSectionRequest(WorldSectionType.ALL_DIRECT_MESSAGE_EVERYONE),
-      // Include unnamed rooms (group DMs without names)
       buildSectionRequest(WorldSectionType.STARRED_DMS_AND_STARRED_UNNAMED_ROOMS),
       buildSectionRequest(WorldSectionType.NON_STARRED_DMS_AND_NON_STARRED_UNNAMED_ROOMS),
     ],
@@ -383,23 +355,10 @@ export function encodePaginatedWorldRequest(pageSize = 100, cursor?: number): Ui
   return PaginatedWorldRequest.encode(message).finish();
 }
 
-/**
- * Check if a group ID is a DM ID vs a space ID
- * DM IDs are typically longer alphanumeric strings, while space IDs start with "AAAA"
- */
 export function isDmId(groupId: string): boolean {
-  // Space IDs start with "AAAA" and are 11 chars
-  // DM IDs are different format (alphanumeric, variable length)
   return !groupId.startsWith('AAAA');
 }
 
-/**
- * Encode a ListTopicsRequest
- * Supports both space IDs (field 1) and DM IDs (field 3) in group_id
- * 
- * @param options.includeHistory - Fetch messages from before user joined (sets group_not_older_than to 0)
- * @param options.cursor - Timestamp (microseconds) to start fetching from (for efficient date range queries)
- */
 export function encodeListTopicsRequest(
   groupId: string,
   options: {
@@ -407,21 +366,19 @@ export function encodeListTopicsRequest(
     repliesPerTopic?: number;
     cursor?: number;
     isDm?: boolean;
-    includeHistory?: boolean;  // Fetch messages from before user joined
+    includeHistory?: boolean;  
   } = {}
 ): Uint8Array {
   const { pageSize = 25, repliesPerTopic = 50, cursor, isDm, includeHistory = false } = options;
 
-  // Auto-detect if this is a DM ID if not explicitly specified
   const isDirectMessage = isDm ?? isDmId(groupId);
 
   const root = loadProto();
   const ListTopicsRequest = root.lookupType('ListTopicsRequest');
 
-  // Build groupId with correct field based on whether this is a space or DM
   const groupIdPayload = isDirectMessage
-    ? { dmId: { dmId: groupId } }      // DM uses field 3
-    : { spaceId: { spaceId: groupId } }; // Space uses field 1
+    ? { dmId: { dmId: groupId } }      
+    : { spaceId: { spaceId: groupId } }; 
 
   const payload: Record<string, unknown> = {
     requestHeader: createRequestHeader(),
@@ -432,18 +389,7 @@ export function encodeListTopicsRequest(
     groupId: groupIdPayload,
   };
 
-  // Pagination support via timestamp cursors:
-  // Based on captured Chrome requests, pagination uses two timestamp fields:
-  // - userNotOlderThan (field 9): Upper bound - fetch topics with sort_time <= this
-  // - groupNotOlderThan (field 10): Lower bound - fetch topics with sort_time >= this
-  //
-  // For cursor-based pagination (fetching older topics):
-  // Set userNotOlderThan to the oldest sort_time from the previous page
-  //
-  // If includeHistory is true, set group_not_older_than to 0 (epoch start)
-  // This allows fetching messages from before the user joined the group.
   if (cursor !== undefined) {
-    // For pagination: set upper bound to cursor to get topics older than cursor
     payload.userNotOlderThan = { timestamp: cursor };
   }
   
@@ -458,26 +404,20 @@ export function encodeListTopicsRequest(
   return ListTopicsRequest.encode(message).finish();
 }
 
-/**
- * Encode a ListMessagesRequest (for single thread)
- * Supports both space IDs (field 1) and DM IDs (field 3) in group_id
- */
 export function encodeListMessagesRequest(
   groupId: string,
   topicId: string,
   pageSize = 100,
   isDm?: boolean
 ): Uint8Array {
-  // Auto-detect if this is a DM ID if not explicitly specified
   const isDirectMessage = isDm ?? isDmId(groupId);
 
   const root = loadProto();
   const ListMessagesRequest = root.lookupType('ListMessagesRequest');
 
-  // Build groupId with correct field based on whether this is a space or DM
   const groupIdPayload = isDirectMessage
-    ? { dmId: { dmId: groupId } }      // DM uses field 3
-    : { spaceId: { spaceId: groupId } }; // Space uses field 1
+    ? { dmId: { dmId: groupId } }      
+    : { spaceId: { spaceId: groupId } }; 
 
   const message = ListMessagesRequest.create({
     requestHeader: createRequestHeader(),
@@ -493,9 +433,6 @@ export function encodeListMessagesRequest(
   return ListMessagesRequest.encode(message).finish();
 }
 
-/**
- * Encode a GetMembersRequest
- */
 export function encodeGetMembersRequest(userIds: string[]): Uint8Array {
   const root = loadProto();
   const GetMembersRequest = root.lookupType('GetMembersRequest');
@@ -513,9 +450,6 @@ export function encodeGetMembersRequest(userIds: string[]): Uint8Array {
   return GetMembersRequest.encode(message).finish();
 }
 
-/**
- * Encode a GetGroupRequest
- */
 export function encodeGetGroupRequest(spaceId: string): Uint8Array {
   const root = loadProto();
   const GetGroupRequest = root.lookupType('GetGroupRequest');
@@ -530,9 +464,6 @@ export function encodeGetGroupRequest(spaceId: string): Uint8Array {
   return GetGroupRequest.encode(message).finish();
 }
 
-/**
- * Encode a GetSelfUserStatusRequest
- */
 export function encodeGetSelfUserStatusRequest(): Uint8Array {
   const root = loadProto();
   const GetSelfUserStatusRequest = root.lookupType('GetSelfUserStatusRequest');
@@ -544,33 +475,24 @@ export function encodeGetSelfUserStatusRequest(): Uint8Array {
   return GetSelfUserStatusRequest.encode(message).finish();
 }
 
-/**
- * Generate a unique local ID for message tracking
- */
 function generateLocalId(): string {
   return `node-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/**
- * Encode a CreateTopicRequest (send new message/create thread)
- * Supports both space IDs (field 1) and DM IDs (field 3) in group_id
- */
 export function encodeCreateTopicRequest(
   groupId: string,
   text: string,
   localId?: string,
   isDm?: boolean
 ): Uint8Array {
-  // Auto-detect if this is a DM ID if not explicitly specified
   const isDirectMessage = isDm ?? isDmId(groupId);
 
   const root = loadProto();
   const CreateTopicRequest = root.lookupType('CreateTopicRequest');
 
-  // Build groupId with correct field based on whether this is a space or DM
   const groupIdPayload = isDirectMessage
-    ? { dmId: { dmId: groupId } }      // DM uses field 3
-    : { spaceId: { spaceId: groupId } }; // Space uses field 1
+    ? { dmId: { dmId: groupId } }      
+    : { spaceId: { spaceId: groupId } }; 
 
   const message = CreateTopicRequest.create({
     requestHeader: createRequestHeader(),
@@ -585,10 +507,6 @@ export function encodeCreateTopicRequest(
   return CreateTopicRequest.encode(message).finish();
 }
 
-/**
- * Encode a CreateMessageRequest (reply to thread)
- * Supports both space IDs (field 1) and DM IDs (field 3) in group_id
- */
 export function encodeCreateMessageRequest(
   groupId: string,
   topicId: string,
@@ -596,16 +514,14 @@ export function encodeCreateMessageRequest(
   localId?: string,
   isDm?: boolean
 ): Uint8Array {
-  // Auto-detect if this is a DM ID if not explicitly specified
   const isDirectMessage = isDm ?? isDmId(groupId);
 
   const root = loadProto();
   const CreateMessageRequest = root.lookupType('CreateMessageRequest');
 
-  // Build groupId with correct field based on whether this is a space or DM
   const groupIdPayload = isDirectMessage
-    ? { dmId: { dmId: groupId } }      // DM uses field 3
-    : { spaceId: { spaceId: groupId } }; // Space uses field 1
+    ? { dmId: { dmId: groupId } }      
+    : { spaceId: { spaceId: groupId } }; 
 
   const message = CreateMessageRequest.create({
     requestHeader: createRequestHeader(),
@@ -625,10 +541,6 @@ export function encodeCreateMessageRequest(
   return CreateMessageRequest.encode(message).finish();
 }
 
-/**
- * Encode a GetUserPresenceRequest
- * Fetches presence status for one or more users
- */
 export function encodeGetUserPresenceRequest(
   userIds: string[],
   options: {
@@ -654,12 +566,6 @@ export function encodeGetUserPresenceRequest(
   return GetUserPresenceRequest.encode(message).finish();
 }
 
-/**
- * Encode a SetFocusRequest
- * Sets the user's focus state (active/focused in chat)
- * @param focusState - 1 = FOCUSED, 2 = NOT_FOCUSED
- * @param timeoutSeconds - How long the focus state lasts (default 120)
- */
 export function encodeSetFocusRequest(
   focusState: number = 1,
   timeoutSeconds: number = 120
@@ -676,12 +582,6 @@ export function encodeSetFocusRequest(
   return SetFocusRequest.encode(message).finish();
 }
 
-/**
- * Encode a SetActiveClientRequest
- * Marks the client as active to show online status
- * @param isActive - Whether the client is active
- * @param timeoutSeconds - How long the active state lasts (default 120)
- */
 export function encodeSetActiveClientRequest(
   isActive: boolean = true,
   timeoutSeconds: number = 120
@@ -698,12 +598,6 @@ export function encodeSetActiveClientRequest(
   return SetActiveClientRequest.encode(message).finish();
 }
 
-/**
- * Encode a SetPresenceSharedRequest
- * Enables/disables presence sharing to show as online
- * @param presenceShared - Whether to share presence (true = online, false = invisible)
- * @param timeoutSeconds - How long the presence state lasts (default 300)
- */
 export function encodeSetPresenceSharedRequest(
   presenceShared: boolean = true,
   timeoutSeconds: number = 300
@@ -720,31 +614,21 @@ export function encodeSetPresenceSharedRequest(
   return SetPresenceSharedRequest.encode(message).finish();
 }
 
-/**
- * Encode a MarkGroupReadstateRequest
- * Marks a conversation (space or DM) as read up to the specified timestamp
- * @param groupId - The space ID or DM ID
- * @param lastReadTimeMicros - Timestamp in microseconds (defaults to current time)
- * @param isDm - Whether this is a DM (auto-detected if not specified)
- */
 export function encodeMarkGroupReadstateRequest(
   groupId: string,
   lastReadTimeMicros?: number,
   isDm?: boolean
 ): Uint8Array {
-  // Auto-detect if this is a DM ID if not explicitly specified
   const isDirectMessage = isDm ?? isDmId(groupId);
 
-  // Default to current time in microseconds
   const timestamp = lastReadTimeMicros ?? Date.now() * 1000;
 
   const root = loadProto();
   const MarkGroupReadstateRequest = root.lookupType('MarkGroupReadstateRequest');
 
-  // Build groupId with correct field based on whether this is a space or DM
   const groupIdPayload = isDirectMessage
-    ? { dmId: { dmId: groupId } }      // DM uses field 3
-    : { spaceId: { spaceId: groupId } }; // Space uses field 1
+    ? { dmId: { dmId: groupId } }      
+    : { spaceId: { spaceId: groupId } }; 
 
   const message = MarkGroupReadstateRequest.create({
     requestHeader: createRequestHeader(),
@@ -755,10 +639,6 @@ export function encodeMarkGroupReadstateRequest(
   return MarkGroupReadstateRequest.encode(message).finish();
 }
 
-/**
- * Encode a CatchUpUserRequest
- * This API might return all group memberships including hidden/archived spaces
- */
 export function encodeCatchUpUserRequest(): Uint8Array {
   const root = loadProto();
   const CatchUpUserRequest = root.lookupType('CatchUpUserRequest');
@@ -774,20 +654,6 @@ export function encodeCatchUpUserRequest(): Uint8Array {
   return CatchUpUserRequest.encode(message).finish();
 }
 
-/**
- * Encode a CatchUpGroupRequest for efficient server-side time filtering
- * 
- * Uses CatchUpRange for timestamp-based filtering:
- * - sinceUsec: from_revision_timestamp (lower bound, inclusive)
- * - untilUsec: to_revision_timestamp (upper bound, inclusive)
- * 
- * @param groupId - The space ID or DM ID
- * @param options.sinceUsec - Get messages after this timestamp (microseconds)
- * @param options.untilUsec - Get messages before this timestamp (microseconds)
- * @param options.pageSize - Number of events per page (default 500)
- * @param options.cutoffSize - Maximum total events (default 2000)
- * @param options.isDm - Whether this is a DM (auto-detected if not specified)
- */
 export function encodeCatchUpGroupRequest(
   groupId: string,
   options: {
@@ -806,18 +672,15 @@ export function encodeCatchUpGroupRequest(
     isDm 
   } = options;
 
-  // Auto-detect if this is a DM ID if not explicitly specified
   const isDirectMessage = isDm ?? isDmId(groupId);
 
   const root = loadProto();
   const CatchUpGroupRequest = root.lookupType('CatchUpGroupRequest');
 
-  // Build groupId with correct field based on whether this is a space or DM
   const groupIdPayload = isDirectMessage
-    ? { dmId: { dmId: groupId } }      // DM uses field 3
-    : { spaceId: { spaceId: groupId } }; // Space uses field 1
+    ? { dmId: { dmId: groupId } }      
+    : { spaceId: { spaceId: groupId } }; 
 
-  // Build range only if time filters are specified
   const range: Record<string, number> = {};
   if (sinceUsec !== undefined) {
     range.fromRevisionTimestamp = sinceUsec;
@@ -833,7 +696,6 @@ export function encodeCatchUpGroupRequest(
     cutoffSize: cutoffSize,
   };
 
-  // Only include range if we have time filters
   if (Object.keys(range).length > 0) {
     payload.range = range;
   }

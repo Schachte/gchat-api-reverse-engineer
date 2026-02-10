@@ -73,7 +73,6 @@ describe('utils/export-chat', () => {
 
     expect(batches).toHaveLength(2);
 
-    // First call uses provided cursors; second call uses returned next cursors + preserved anchor.
     expect(fetchTopicsWithServerPagination).toHaveBeenNthCalledWith(
       1,
       'space-1',
@@ -95,11 +94,9 @@ describe('utils/export-chat', () => {
       })
     );
 
-    // Cursor state yielded for each page reflects the request cursors + preserved anchor.
     expect(batches[0].cursors).toEqual({ sortTimeCursor: 's0', timestampCursor: 'ts0', anchorTimestamp: 'a1' });
     expect(batches[1].cursors).toEqual({ sortTimeCursor: 'c1', timestampCursor: 'ts1', anchorTimestamp: 'a1' });
 
-    // Messages are rebuilt from topics (not taken from result.messages).
     expect(batches[0].messages.map((m: FakeMessage) => m.message_id)).toEqual(['m1']);
     expect(batches[1].messages.map((m: FakeMessage) => m.message_id)).toEqual(['m2']);
   });
@@ -153,17 +150,14 @@ describe('utils/export-chat', () => {
     expect(done).toBe(false);
     expect(batch.topics).toHaveLength(2);
 
-    // First topic expanded.
     expect(getThread).toHaveBeenCalledWith('space-1', 't1', 999, undefined);
     expect(batch.topics[0].replies.map((m: FakeMessage) => m.message_id)).toEqual(['m1', 'm1b', 'm1c']);
     expect(batch.topics[0].message_count).toBe(3);
     expect(batch.topics[0].has_more_replies).toBe(false);
 
-    // Second topic kept embedded replies on failure.
     expect(getThread).toHaveBeenCalledWith('space-1', 't2', 999, undefined);
     expect(batch.topics[1].replies.map((m: FakeMessage) => m.message_id)).toEqual(['m2']);
 
-    // Messages rebuilt from final topic replies.
     expect(batch.messages.map((m: FakeMessage) => m.message_id)).toEqual(['m1', 'm1b', 'm1c', 'm2']);
   });
 

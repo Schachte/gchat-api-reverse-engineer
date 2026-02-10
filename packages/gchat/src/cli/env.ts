@@ -20,12 +20,6 @@ function resolveFromCwd(inputPath: string): string {
   return path.isAbsolute(inputPath) ? inputPath : path.resolve(process.cwd(), inputPath);
 }
 
-// Loads `.env` early for CLI usage.
-//
-// Search order:
-// - `GCHAT_ENV_FILE` (explicit)
-// - `.env` in cwd
-// - `.env` in parent/grandparent dir (useful when running via repo root scripts)
 const explicit = process.env.GCHAT_ENV_FILE;
 if (explicit) {
   tryLoadEnvFile(resolveFromCwd(explicit));

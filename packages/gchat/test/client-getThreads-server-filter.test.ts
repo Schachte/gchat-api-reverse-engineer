@@ -28,7 +28,6 @@ describe('GoogleChatClient.getThreads', () => {
     });
 
     const apiRequest = vi.fn(async (endpoint: string) => {
-      // getThreads should call catch_up_group (proto payload content isn't important for this test).
       if (endpoint !== 'catch_up_group') throw new Error(`unexpected endpoint: ${endpoint}`);
       return [];
     });
@@ -51,7 +50,6 @@ describe('GoogleChatClient.getThreads', () => {
     expect((client as any).parseCatchUpGroupResponse).toHaveBeenCalledTimes(1);
     expect((client as any).fetchTopicsWithClientSideFiltering).not.toHaveBeenCalled();
 
-    // format=threaded returns topics, empty flat messages
     expect(result.messages).toEqual([]);
     expect(result.topics.map((t) => t.topic_id)).toEqual(['t1']);
   });

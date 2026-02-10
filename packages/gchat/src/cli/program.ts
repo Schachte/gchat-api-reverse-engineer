@@ -36,10 +36,6 @@ import {
 import { log, setLogLevel, setLogColors, type LogLevel } from '../core/logger.js';
 import type { Message, Space, Topic, WorldItemSummary, UserPresence, UserPresenceWithProfile, ImageMetadata, AttachmentMetadata, UrlMetadata } from '../core/types.js';
 
-// =========================================================================
-// Output Formatting
-// =========================================================================
-
 const colors = {
   reset: '\x1b[0m',
   bold: '\x1b[1m',
@@ -57,23 +53,14 @@ function c(color: keyof typeof colors, text: string): string {
   return useColors ? `${colors[color]}${text}${colors.reset}` : text;
 }
 
-/**
- * Create a clickable terminal hyperlink using OSC 8 escape sequence
- * Format: \e]8;;URL\e\\TEXT\e]8;;\e\\
- * Falls back to showing URL in parentheses if colors are disabled
- */
 function link(url: string, text?: string): string {
   const displayText = text || url;
   if (!useColors) {
     return text ? `${text} (${url})` : url;
   }
-  // OSC 8 hyperlink format: \x1b]8;;URL\x1b\\TEXT\x1b]8;;\x1b\\
   return `\x1b]8;;${url}\x1b\\${c('cyan', displayText)}\x1b]8;;\x1b\\`;
 }
 
-/**
- * Format file size for display
- */
 function formatFileSize(bytes?: number): string {
   if (!bytes) return '';
   if (bytes < 1024) return `${bytes}B`;
@@ -87,12 +74,10 @@ function formatMessage(msg: Message, indent = '', showTopicId = false): string {
   const text = msg.text.length > 300 ? msg.text.slice(0, 300) + '...' : msg.text;
   const prefix = msg.is_thread_reply ? '  ↳ ' : '';
 
-  // Format mentions
   const mentionsStr = msg.mentions?.length
     ? c('red', ` [@${msg.mentions.map(m => m.display_name || m.user_id).join(', @')}]`)
     : '';
 
-  // Show topic ID for thread heads (not replies)
   const topicStr = showTopicId && msg.topic_id && !msg.is_thread_reply
     ? c('cyan', ` [topic: ${msg.topic_id}]`)
     : '';
@@ -102,7 +87,6 @@ function formatMessage(msg: Message, indent = '', showTopicId = false): string {
     `${indent}${prefix}${text}`,
   ];
 
-  // Format URLs as clickable links
   if (msg.urls?.length) {
     for (const url of msg.urls) {
       const urlLine = url.title
@@ -112,7 +96,6 @@ function formatMessage(msg: Message, indent = '', showTopicId = false): string {
     }
   }
 
-  // Format images with URLs
   if (msg.images?.length) {
     for (const img of msg.images) {
       const sizeInfo = img.width && img.height ? ` ${img.width}x${img.height}` : '';
@@ -123,7 +106,6 @@ function formatMessage(msg: Message, indent = '', showTopicId = false): string {
     }
   }
 
-  // Format attachments with file info
   if (msg.attachments?.length) {
     for (const att of msg.attachments) {
       const name = att.content_name || 'attachment';
@@ -181,7 +163,6 @@ function printWarning(text: string): void {
 function formatWorldItem(item: WorldItemSummary, showReadStatus = false): string {
   const name = item.name || '(unnamed)';
 
-  // Format notification category with color
   const categoryColors: Record<string, keyof typeof colors> = {
     direct_mention: 'red',
     subscribed_thread: 'yellow',
@@ -199,12 +180,10 @@ function formatWorldItem(item: WorldItemSummary, showReadStatus = false): string
   const category = item.notificationCategory || 'none';
   const categoryStr = c(categoryColors[category] || 'dim', categoryLabels[category] || category);
 
-  // Thread info if present
   const threadStr = item.subscribedThreadId
     ? c('dim', ` [thread: ${item.subscribedThreadId}]`)
     : '';
 
-  // Read/unread status indicator
   const isUnread = category !== 'none';
   const readStatusStr = showReadStatus
     ? (isUnread ? c('red', ' ●') : c('dim', ' ○'))
@@ -212,10 +191,6 @@ function formatWorldItem(item: WorldItemSummary, showReadStatus = false): string
 
   return `  ${c('cyan', item.id)}  ${name}  ${c('dim', `[${item.type}]`)}  ${categoryStr}${threadStr}${readStatusStr}`;
 }
-
-// =========================================================================
-// Interactive Prompts
-// =========================================================================
 
 async function confirmAction(message: string): Promise<boolean> {
   const rl = readline.createInterface({
@@ -230,15 +205,6 @@ async function confirmAction(message: string): Promise<boolean> {
     });
   });
 }
-
-// =========================================================================
-// Client Creation
-// =========================================================================
-// Shared logic lives in ./app/client.ts
-
-// =========================================================================
-// Commands
-// =========================================================================
 
 async function cmdSpaces(options: { refresh?: boolean; json?: boolean; profile?: string }): Promise<void> {
   const client = await createClient(options);
@@ -405,7 +371,6 @@ async function cmdAuthWatch(options: { profile?: string; interval?: string; cach
 
   let refreshCount = 0;
 
-  // Function to perform refresh
   const performRefresh = async () => {
     refreshCount++;
     const timestamp = new Date().toISOString();
@@ -414,13 +379,10 @@ async function cmdAuthWatch(options: { profile?: string; interval?: string; cach
     try {
       log.auth.info(`[Refresh #${refreshCount}] Starting authentication refresh...`);
 
-      // Invalidate cache to force fresh extraction
       invalidateCache(cacheDir);
 
-      // Extract fresh cookies from Chrome
       const cookies = getCookies();
 
-      // Authenticate with fresh cookies
       const authResult = await authenticateWithCookies({
         cookies,
         forceRefresh: true,
@@ -440,15 +402,12 @@ async function cmdAuthWatch(options: { profile?: string; interval?: string; cach
     console.log('');
   };
 
-  // Perform initial refresh
   await performRefresh();
 
-  // Set up interval for periodic refreshes
   const intervalId = setInterval(async () => {
     await performRefresh();
   }, intervalMs);
 
-  // Handle graceful shutdown
   const shutdown = () => {
     console.log('');
     printInfo('Stopping authentication watch...');
@@ -460,7 +419,6 @@ async function cmdAuthWatch(options: { profile?: string; interval?: string; cach
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  // Keep the process alive
   await new Promise(() => {});
 }
 
@@ -472,14 +430,12 @@ async function cmdAuthInjectCookies(options: {
 }): Promise<void> {
   printHeader('Inject Cookies to Chrome Profile');
 
-  // Security warning
   printWarning('SECURITY WARNING:');
   console.log('  - Only inject cookies you own or have legitimate access to');
   console.log('  - Chrome must be completely closed before running this');
   console.log('  - Cookies will be encrypted and written to Chrome database');
   console.log('');
 
-  // Check if cookies.txt exists
   const cookiesFile = options.file || 'cookies.txt';
   const cookiesPath = path.resolve(cookiesFile);
 
@@ -495,11 +451,9 @@ async function cmdAuthInjectCookies(options: {
   }
 
   try {
-    // Read cookies from file
     const cookieContent = readFileSync(cookiesPath, 'utf-8').trim();
     let cookies: Cookies;
 
-    // Try to parse as JSON first
     if (cookieContent.startsWith('{')) {
       try {
         const parsed = JSON.parse(cookieContent);
@@ -513,7 +467,6 @@ async function cmdAuthInjectCookies(options: {
         process.exit(1);
       }
     } else {
-      // Parse as KEY=value; format
       cookies = {};
       for (const part of cookieContent.split(';')) {
         const trimmed = part.trim();
@@ -542,7 +495,6 @@ async function cmdAuthInjectCookies(options: {
     printInfo(`Expires in: ${options.expires || '365'} days`);
     console.log('');
 
-    // Inject cookies
     injectCookiesToBrowser(cookies, {
       profile: options.profile,
       domain: options.domain,
@@ -573,14 +525,12 @@ async function cmdAuthInjectCookiesRemote(options: {
 
   printHeader(`Inject Cookies to Remote Chromium (${options.host})`);
 
-  // Security warning
   printWarning('SECURITY WARNING:');
   console.log('  - Only inject cookies you own or have legitimate access to');
   console.log('  - Chromium must be completely closed on remote before running this');
   console.log('  - Requires SSH access to remote machine');
   console.log('');
 
-  // Check if cookies file exists
   const cookiesFile = options.file || 'cookies.txt';
   const cookiesPath = path.resolve(cookiesFile);
 
@@ -591,12 +541,10 @@ async function cmdAuthInjectCookiesRemote(options: {
   }
 
   try {
-    // Read cookies from file
     printInfo('Loading cookies from local file...');
     const cookieContent = readFileSync(cookiesPath, 'utf-8').trim();
     let cookies: Cookies;
 
-    // Parse cookies (same logic as local injection)
     if (cookieContent.startsWith('{')) {
       const parsed = JSON.parse(cookieContent);
       cookies = parsed.cookies || parsed;
@@ -621,7 +569,6 @@ async function cmdAuthInjectCookiesRemote(options: {
     printSuccess(`Loaded ${Object.keys(cookies).length} cookies`);
     console.log('');
 
-    // Detect remote browser
     printInfo('Detecting Chromium on remote...');
     const browserPath = options.browserPath || '~/snap/chromium/common/chromium/Default/Cookies';
 
@@ -640,7 +587,6 @@ async function cmdAuthInjectCookiesRemote(options: {
       process.exit(1);
     }
 
-    // Check if Chromium is running
     printInfo('Checking if Chromium is running...');
     try {
       exec(`ssh ${options.host} "pgrep chromium"`, { stdio: 'ignore' });
@@ -652,14 +598,12 @@ async function cmdAuthInjectCookiesRemote(options: {
 
     console.log('');
 
-    // Transfer and inject via SSH + Python script
     printInfo('Generating injection script...');
 
     const domain = options.domain || '.google.com';
     const expiresInDays = options.expires ? parseInt(options.expires, 10) : 365;
     const password = options.password || 'peanuts';
 
-    // Create a standalone Python script that can run remotely
     const injectionScript = `#!/usr/bin/env python3
 import sqlite3
 import hashlib
@@ -764,12 +708,10 @@ conn.close()
 print(f"Complete: {injected} inserted, {updated} updated")
 `;
 
-    // Transfer script to remote
     const scriptPath = `/tmp/inject-cookies-${Date.now()}.py`;
     printInfo('Transferring injection script to remote...');
     exec(`ssh ${options.host} "cat > ${scriptPath}" <<'EOFSCRIPT'\n${injectionScript}\nEOFSCRIPT`);
 
-    // Execute on remote
     printInfo('Executing injection on remote...');
     console.log('');
 
@@ -780,7 +722,6 @@ print(f"Complete: {injected} inserted, {updated} updated")
 
     console.log(result.toString());
 
-    // Cleanup
     exec(`ssh ${options.host} "rm -f ${scriptPath}"`);
 
     printSuccess('Remote cookie injection complete!');
@@ -818,8 +759,6 @@ async function cmdNotifications(options: {
   const client = await createClient(options);
   let { items, raw } = await client.fetchWorldItems();
 
-  // For --me (direct mentions), find the "mentions-shortcut" channel first
-  // This channel contains all spaces where you've been @mentioned
   let mentionsShortcutId: string | undefined;
   if (options.me && !options.space) {
     const mentionsSpaces = await client.findSpaces('mentions');
@@ -832,12 +771,10 @@ async function cmdNotifications(options: {
       if (!options.json) {
         printInfo(`Using mentions-shortcut channel: ${mentionsShortcut.name || mentionsShortcut.id}`);
       }
-      // Pre-filter items to only the mentions-shortcut channel
       items = items.filter(item => item.id === mentionsShortcutId);
     }
   }
 
-  // If filtering by a specific space, only keep that one
   if (options.space) {
     items = items.filter(item => item.id === options.space);
     if (items.length === 0) {
@@ -846,26 +783,20 @@ async function cmdNotifications(options: {
     }
   }
 
-  // If filtering by direct @me mentions, we need the user ID first
   if (options.me || options.atAll) {
     await client.getSelfUser();
   }
 
-  // Categorize by notification type
   const directMentions = items.filter(item => item.notificationCategory === 'direct_mention');
   const subscribedThreads = items.filter(item => item.notificationCategory === 'subscribed_thread');
   const subscribedSpaces = items.filter(item => item.notificationCategory === 'subscribed_space');
   const directMessages = items.filter(item => item.notificationCategory === 'direct_message');
   const readItems = items.filter(item => item.notificationCategory === 'none');
 
-  // Check if any category filter is specified
   const hasCategoryFilter = options.mentions || options.threads || options.spaces || options.dms || options.read || options.me || options.atAll;
-  // Check if read/unread filter is specified
   const hasReadFilter = options.read || options.unread;
-  // Check if we need to fetch messages to filter by mention type
   const needsMentionCheck = options.me || options.atAll;
 
-  // Legacy filters for backward compatibility
   const unreads = items.filter(item =>
     item.notificationCategory !== 'none'
   );
@@ -879,7 +810,6 @@ async function cmdNotifications(options: {
     writeFileSync(join(dumpDir, 'world_items.json'), JSON.stringify(items, null, 2));
   }
 
-  // Determine which items to fetch messages for based on filters
   let itemsToFetch: WorldItemSummary[] = [];
   if (hasCategoryFilter && !needsMentionCheck) {
     if (options.mentions) itemsToFetch = itemsToFetch.concat(directMentions);
@@ -888,19 +818,16 @@ async function cmdNotifications(options: {
     if (options.dms) itemsToFetch = itemsToFetch.concat(directMessages);
     if (options.read) itemsToFetch = itemsToFetch.concat(readItems);
   } else if (needsMentionCheck) {
-    // For --me and --at-all, we need to check all mention spaces
     itemsToFetch = directMentions;
   } else if (options.unread) {
-    // --unread flag shows only unread items (all categories except 'none')
     itemsToFetch = unreads;
   } else {
     itemsToFetch = unreads;
   }
 
-  // Apply pagination (--limit and --offset) to items being fetched
   const totalBeforePagination = itemsToFetch.length;
   const offset = parseInt(options.offset || '0', 10);
-  const limit = parseInt(options.limit || '0', 10);  // 0 = no limit
+  const limit = parseInt(options.limit || '0', 10);  
   if (offset > 0) {
     itemsToFetch = itemsToFetch.slice(offset);
   }
@@ -908,24 +835,19 @@ async function cmdNotifications(options: {
     itemsToFetch = itemsToFetch.slice(0, limit);
   }
 
-  // If --show-messages or --me/--at-all filter, fetch actual messages
   const messagesLimit = parseInt(options.messagesLimit || '3', 10);
   const spaceMessages: Map<string, Message[]> = new Map();
 
-  // For --me and --at-all, we need to fetch messages to check mention types
   const shouldFetchMessages = options.showMessages || needsMentionCheck;
 
-  // Track which spaces have direct @me mentions vs @all mentions
   const directMeMentionSpaces: WorldItemSummary[] = [];
   const atAllMentionSpaces: WorldItemSummary[] = [];
 
-  // Parallel fetch settings (default: 5 concurrent requests)
   const parallelLimit = parseInt(options.parallel || '5', 10);
 
   if (shouldFetchMessages && itemsToFetch.length > 0) {
     printInfo(`Fetching messages for ${itemsToFetch.length} items (${parallelLimit} parallel)...`);
 
-    // Process items in batches for parallel fetching
     for (let i = 0; i < itemsToFetch.length; i += parallelLimit) {
       const batch = itemsToFetch.slice(i, i + parallelLimit);
       const results = await Promise.allSettled(
@@ -941,7 +863,6 @@ async function cmdNotifications(options: {
           if (result.messages.length > 0) {
             spaceMessages.set(item.id, result.messages);
 
-            // Check for direct @me mentions vs @all
             if (needsMentionCheck) {
               let hasDirectMe = false;
               let hasAtAll = false;
@@ -962,7 +883,6 @@ async function cmdNotifications(options: {
             }
           }
         }
-        // Skip failed requests silently
       }
     }
   }
@@ -974,10 +894,8 @@ async function cmdNotifications(options: {
       subscribedSpaces: options.spaces || !hasCategoryFilter ? subscribedSpaces : [],
       directMessages: options.dms || !hasCategoryFilter ? directMessages : [],
       readItems: options.read || options.all ? readItems : [],
-      // @me and @all filtered lists (only populated when those flags are used)
       directMeMentions: options.me ? directMeMentionSpaces : [],
       atAllMentions: options.atAll ? atAllMentionSpaces : [],
-      // Pagination info
       pagination: {
         total: totalBeforePagination,
         offset,
@@ -985,7 +903,6 @@ async function cmdNotifications(options: {
         returned: itemsToFetch.length,
         hasMore: offset + itemsToFetch.length < totalBeforePagination,
       },
-      // Legacy
       unreads,
       dms,
     };
@@ -1004,14 +921,12 @@ async function cmdNotifications(options: {
 
   printHeader('Notifications');
 
-  // Summary line - show @me/@all counts if those filters were used
   if (needsMentionCheck) {
     printInfo(`@Me: ${directMeMentionSpaces.length}  @All: ${atAllMentionSpaces.length}  (of ${directMentions.length} mention spaces scanned)`);
   } else {
     printInfo(`@Mentions: ${directMentions.length}  Threads: ${subscribedThreads.length}  Spaces: ${subscribedSpaces.length}  DMs: ${directMessages.length}  Read: ${readItems.length}`);
   }
 
-  // Helper to print a category section
   const showReadStatus = hasReadFilter || options.all;
   const showMessages = options.showMessages || needsMentionCheck;
   const printCategorySection = (title: string, categoryItems: WorldItemSummary[], limit?: number) => {
@@ -1032,7 +947,6 @@ async function cmdNotifications(options: {
     }
   };
 
-  // Show by category (filtered or all)
   if (options.me) {
     printCategorySection('DIRECT @ME MENTIONS', directMeMentionSpaces);
   }
@@ -1083,7 +997,7 @@ async function cmdMessages(
   printInfo(`Found ${result.total_messages} messages in ${result.total_topics} threads`);
 
   for (const msg of result.messages) {
-    console.log(formatMessage(msg, '', true));  // Show topic ID for replies
+    console.log(formatMessage(msg, '', true));  
   }
 
   if (result.pagination.has_more) {
@@ -1199,7 +1113,7 @@ async function cmdDMs(
     messagesPerDM,
     parallel,
     unreadOnly: options.unread,
-    includeMessages: true, // CLI always shows messages
+    includeMessages: true, 
   });
 
   if (options.json) {
@@ -1291,9 +1205,7 @@ interface ExportChatState {
   totalMessages: number;
   pagesLoaded: number;
   complete: boolean;
-  // Legacy numeric cursor support
   cursor?: number;
-  // Server-side pagination cursors
   sortTimeCursor?: string;
   timestampCursor?: string;
   anchorTimestamp?: string;
@@ -1377,7 +1289,6 @@ async function cmdExport(
     }
   }
 
-  // Derive resume cursors from file state (supports legacy numeric cursor)
   let sortTimeCursor: string | undefined =
     exportData.state.sortTimeCursor || (exportData.state.cursor ? String(exportData.state.cursor) : undefined);
   let timestampCursor: string | undefined = exportData.state.timestampCursor;
@@ -1471,7 +1382,6 @@ async function cmdExport(
       }
     }
 
-    // Final save + mark complete when we didn't hit maxPages limit
     exportData.state.complete = pagesLoaded < maxPages;
     const cursorNum = sortTimeCursor ? parseInt(sortTimeCursor, 10) : undefined;
     save(cursorNum);
@@ -1588,13 +1498,6 @@ async function cmdStayOnline(options: {
   await session.done;
 }
 
-// =========================================================================
-// Headless Browser Presence
-// =========================================================================
-
-/**
- * Find browser executable path based on user preference
- */
 function findBrowserExecutable(browserPreference?: string): string {
   const browserPaths: Record<string, string[]> = {
     brave: [
@@ -1681,16 +1584,13 @@ async function cmdPresence(options: {
   if (debugPort) console.log(`  Debug port: ${debugPort}`);
   console.log(`  Press Ctrl+C to stop\n`);
 
-  // ── Interactive browser + profile picker ──────────────────────────
   const askQuestion = (prompt: string): Promise<string> => {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     return new Promise(resolve => rl.question(prompt, ans => { rl.close(); resolve(ans.trim()); }));
   };
 
-  // Helper: test if a browser+profile combo has valid cookies
   const testProfileAuth = (browserType: BrowserType, profile: string): { valid: boolean; keys: string[] } => {
     try {
-      // Temporarily switch browser/profile, extract cookies, then check for required keys
       setBrowser(browserType);
       setProfile(profile);
       invalidateCookieCache('.');
@@ -1706,7 +1606,6 @@ async function cmdPresence(options: {
   let selectedBrowserType = options.browser;
   let selectedProfile = options.profile;
 
-  // Discover installed browsers and their profiles
   const browsersWithProfiles = listBrowsersWithProfiles();
   dbg(`Discovered ${browsersWithProfiles.length} browser(s)`);
 
@@ -1715,7 +1614,6 @@ async function cmdPresence(options: {
     process.exit(1);
   }
 
-  // Show interactive picker if browser not specified
   if (!selectedBrowserType) {
     console.log(c('bold', '\n  Available browsers:\n'));
     browsersWithProfiles.forEach(({ browser: b, profiles }, i) => {
@@ -1735,17 +1633,14 @@ async function cmdPresence(options: {
     dbg(`User selected browser: ${selectedBrowserType}`);
   }
 
-  // Set the browser so listProfiles/cookie extraction uses the right one
   setBrowser(selectedBrowserType as BrowserType);
 
-  // Find the profiles for the selected browser
   const matchedEntry = browsersWithProfiles.find(
     e => e.browser.type === selectedBrowserType
   );
   const availableProfiles = matchedEntry?.profiles || [];
   dbg(`Available profiles for ${selectedBrowserType}: ${JSON.stringify(availableProfiles)}`);
 
-  // Test auth on every profile and show results
   if (availableProfiles.length > 0) {
     printInfo(`Testing auth for ${availableProfiles.length} profile(s)...`);
     console.log();
@@ -1766,9 +1661,7 @@ async function cmdPresence(options: {
     }
     console.log();
 
-    // Pick profile
     if (!selectedProfile) {
-      // Auto-select if only one is valid
       const validProfiles = profileResults.filter(r => r.valid);
       if (validProfiles.length === 1 && availableProfiles.length > 1) {
         selectedProfile = validProfiles[0].profile;
@@ -1795,24 +1688,20 @@ async function cmdPresence(options: {
     printInfo(`Using profile: ${selectedProfile}`);
   }
 
-  // ── State file ────────────────────────────────────────────────────
   const cacheDir = resolveCacheDir(options);
   mkdirSync(cacheDir, { recursive: true });
   const stateFilePath = path.join(cacheDir, 'presence-state.json');
   dbg(`Cache dir: ${cacheDir}`);
   dbg(`State file: ${stateFilePath}`);
 
-  // Clear state if --force-login
   if (forceLogin && existsSync(stateFilePath)) {
     printInfo('Clearing saved authentication state...');
     unlinkSync(stateFilePath);
   }
 
-  // Find browser executable for Playwright to drive
   const executablePath = findBrowserExecutable(selectedBrowserType);
   printInfo(`Using browser executable: ${executablePath}`);
 
-  // Dynamic import
   const { chromium } = await import('playwright-core');
 
   type PlaywrightBrowser = Awaited<ReturnType<typeof chromium.launch>>;
@@ -1849,15 +1738,13 @@ async function cmdPresence(options: {
       launchArgs.push(`--remote-debugging-port=${debugPort}`);
     }
 
-    // Check if saved state exists
     const hasState = existsSync(stateFilePath);
     dbg(`Saved state exists: ${hasState}`);
     if (!hasState) {
       printInfo('No saved state — will prompt for login');
-      headless = false; // Force visible for first login
+      headless = false; 
     }
 
-    // Launch browser
     dbg(`Launching browser: headless=${headless}, exe=${executablePath}`);
     dbg(`Launch args: ${JSON.stringify(launchArgs)}`);
     browser = await chromium.launch({
@@ -1867,12 +1754,10 @@ async function cmdPresence(options: {
     });
     dbg('Browser launched OK');
 
-    // Create context (with or without saved state)
     const contextOptions: Record<string, unknown> = {};
     if (hasState) {
       try {
         printInfo('Loading saved authentication state...');
-        // Validate JSON is readable before passing to Playwright
         const raw = readFileSync(stateFilePath, 'utf-8');
         const parsed = JSON.parse(raw);
         dbg(`State file cookies: ${parsed.cookies?.length ?? 0}, origins: ${parsed.origins?.length ?? 0}`);
@@ -1891,27 +1776,17 @@ async function cmdPresence(options: {
       timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
 
-    // Minimal stealth: only hide the webdriver flag.
-    // Aggressive patches (plugins, WebGL, permissions, chrome.runtime) are
-    // counterproductive — Cloudflare Turnstile detects the API modifications
-    // themselves and flags the session as automated (error 600010).
-    // Since we use a real browser binary and manual login, we don't need them.
-    // addInitScript runs before page scripts — string form is OK here (no Trusted Types yet)
     await context.addInitScript({ content: 'Object.defineProperty(navigator, "webdriver", { get: () => undefined })' });
 
     const page = await context.newPage();
     dbg('New page created');
 
-    // Log all page console messages and errors in debug mode
     if (debug) {
       page.on('console', msg => dbg(`PAGE ${msg.type()}: ${msg.text()}`));
       page.on('pageerror', err => dbg(`PAGE ERROR: ${err.message}`));
       page.on('requestfailed', req => dbg(`REQUEST FAILED: ${req.url()} → ${req.failure()?.errorText}`));
     }
 
-    // Helper: inject the confirmation banner and wait for user to click it.
-    // Gmail enforces Trusted Types CSP — cannot use string-based evaluate or innerHTML.
-    // All DOM manipulation must use typed function args + DOM APIs only.
     const injectBannerAndWait = async (message: string) => {
       await page.evaluate((msg: string) => {
         if ((globalThis as any).__gchat_continue) return;
@@ -1950,13 +1825,9 @@ async function cmdPresence(options: {
         (globalThis as any).document.body.appendChild(banner);
       }, message);
 
-      // Poll for the user's click — uses function (not string) to avoid Trusted Types
       await page.waitForFunction(() => (globalThis as any).__gchat_continue === true, { timeout: 0 });
     };
 
-    // Navigate to Google Chat via mail.google.com/chat
-    // Using chat.google.com redirects to workspace.google.com marketing page when not logged in.
-    // mail.google.com/chat forces Google account login and lands directly in the Chat app.
     const chatUrl = 'https://mail.google.com/chat';
     printInfo(`Navigating to ${chatUrl}...`);
     try {
@@ -1966,7 +1837,6 @@ async function cmdPresence(options: {
       });
       dbg(`Navigation complete, URL: ${page.url()}`);
     } catch (err) {
-      // Timeout on initial navigation is OK — page may be slow or redirecting
       dbg(`Navigation threw: ${(err as Error).message}`);
       printInfo('Initial navigation slow, continuing...');
     }
@@ -1974,25 +1844,21 @@ async function cmdPresence(options: {
     dbg('Waiting 5s for page to settle...');
     await new Promise(r => setTimeout(r, 5000));
 
-    // Log page state
     const currentUrl = page.url();
     dbg(`Current URL: ${currentUrl}`);
     const pageTitle = await page.title().catch(() => '(unknown)');
     dbg(`Page title: ${pageTitle}`);
 
-    // Take an early screenshot to see what loaded
     const earlyScreenshot = path.join(tmpdir(), 'gchat-presence-early.png');
     await page.screenshot({ path: earlyScreenshot, fullPage: true }).catch(() => {});
     dbg(`Early screenshot: ${earlyScreenshot}`);
 
-    // Helper: check if we're on a valid Chat page
     const isChatPage = (u: string) =>
       u.includes('mail.google.com/chat') ||
       u.includes('chat.google.com') ||
-      u.includes('mail.google.com/mail') // Gmail with chat sidebar counts too
+      u.includes('mail.google.com/mail') 
     ;
 
-    // Check auth status — handle redirects to Google sign-in or marketing page
     if (!isChatPage(currentUrl)) {
       dbg(`Auth required — current URL is not a Chat page: ${currentUrl}`);
 
@@ -2010,7 +1876,7 @@ async function cmdPresence(options: {
 
       try {
         await page.waitForURL(url => isChatPage(url.toString()), {
-          timeout: 300000, // 5 minutes
+          timeout: 300000, 
         });
         dbg(`Login redirect detected, new URL: ${page.url()}`);
       } catch {
@@ -2026,7 +1892,6 @@ async function cmdPresence(options: {
         process.exit(1);
       }
 
-      // Let the Chat UI finish loading
       dbg('Waiting 5s for Chat UI to settle after login...');
       await new Promise(r => setTimeout(r, 5000));
       dbg(`Post-login URL: ${page.url()}`);
@@ -2034,8 +1899,6 @@ async function cmdPresence(options: {
       printInfo('Already logged in');
     }
 
-    // In visible mode: show banner and wait for user to confirm before proceeding.
-    // In headless mode with existing state: skip the banner — no window to click.
     if (!headless) {
       printInfo('Click "Save Session & Start" in the browser when ready...');
       dbg('Injecting confirmation banner...');
@@ -2045,13 +1908,11 @@ async function cmdPresence(options: {
       dbg('Headless mode — skipping banner confirmation');
     }
 
-    // Save state
     printInfo('Saving authentication state...');
     await context.storageState({ path: stateFilePath });
     printInfo(`Saved to ${stateFilePath}`);
     dbg(`State file size: ${readFileSync(stateFilePath, 'utf-8').length} bytes`);
 
-    // Capture screenshot on successful login
     const screenshotPath = path.join(tmpdir(), 'gchat-presence-logged-in.png');
     await page.screenshot({ path: screenshotPath, fullPage: true });
 
@@ -2059,7 +1920,6 @@ async function cmdPresence(options: {
     console.log(`${c('dim', `[${timestamp}]`)} ${c('green', '✓')} Connected to Google Chat`);
     console.log(`${c('dim', `[${timestamp}]`)} ${c('cyan', '→')} Screenshot: ${screenshotPath}`);
 
-    // Verify user via API cookies
     const cookies = getCookies();
     dbg(`API cookies extracted: ${Object.keys(cookies).length} keys`);
     try {
@@ -2078,7 +1938,6 @@ async function cmdPresence(options: {
       console.log(`${c('dim', `[${timestamp}]`)} ${c('yellow', '⚠')} Failed to fetch user: ${(err as Error).message}`);
     }
 
-    // Navigate to the target channel
     const channelUrl = `https://mail.google.com/chat/u/0/#chat/space/${channel}`;
     printInfo(`Opening channel: ${channelUrl}`);
     try {
@@ -2088,18 +1947,15 @@ async function cmdPresence(options: {
       dbg('Channel navigation slow, continuing...');
     }
 
-    // Wait longer — SPA needs time to render the channel view
     dbg('Waiting 10s for channel to render...');
     await new Promise(r => setTimeout(r, 10000));
 
-    // Screenshot to see what actually rendered
     if (debug) {
       const chanScreenshot = path.join(tmpdir(), 'gchat-presence-channel.png');
       await page.screenshot({ path: chanScreenshot, fullPage: true }).catch(() => {});
       dbg(`Channel screenshot: ${chanScreenshot}`);
     }
 
-    // Selectors for the compose input
     const inputSelectors = [
       'div[role="textbox"][aria-label*="message" i]',
       'div[role="textbox"][aria-label*="Message" i]',
@@ -2113,7 +1969,6 @@ async function cmdPresence(options: {
       'div[contenteditable="true"]',
     ];
 
-    // Helper: dump editable elements for a given frame
     const dumpEditables = async (frame: { evaluate: typeof page.evaluate }, label: string) => {
       try {
         const elements = await frame.evaluate(() => {
@@ -2136,7 +1991,6 @@ async function cmdPresence(options: {
       }
     };
 
-    // Debug: scan main page and all frames
     if (debug) {
       await dumpEditables(page, 'main');
       const frames = page.frames();
@@ -2148,7 +2002,6 @@ async function cmdPresence(options: {
       }
     }
 
-    // Helper: check if an element looks like a compose box (empty or placeholder-only)
     const isComposeBox = async (el: Awaited<ReturnType<typeof page.$>>) => {
       if (!el) return false;
       try {
@@ -2158,17 +2011,13 @@ async function cmdPresence(options: {
           ariaLabel: node.getAttribute('aria-label') || '',
         }));
         dbg(`  Candidate: text="${info.text.slice(0, 40)}" height=${info.height} aria="${info.ariaLabel}"`);
-        // Compose box should be empty (or have placeholder), not a content area
-        // Also skip very tall elements (conversation area)
         return info.text.length === 0 && info.height < 200;
       } catch {
         return false;
       }
     };
 
-    // Search for compose input across main page and all iframes
     const focusInput = async (): Promise<boolean> => {
-      // Search a frame for the compose box
       const searchFrame = async (frame: typeof page | ReturnType<typeof page.frames>[0], label: string): Promise<boolean> => {
         for (const sel of inputSelectors) {
           try {
@@ -2185,10 +2034,8 @@ async function cmdPresence(options: {
         return false;
       };
 
-      // Try main page first
       if (await searchFrame(page, 'main')) return true;
 
-      // Try each iframe
       const frames = page.frames();
       for (let i = 0; i < frames.length; i++) {
         if (await searchFrame(frames[i], `frame-${i}`)) return true;
@@ -2198,38 +2045,32 @@ async function cmdPresence(options: {
       return false;
     };
 
-    // Type a few random chars then backspace them — triggers typing indicator
     const simulateTyping = async () => {
       const focused = await focusInput();
       if (!focused) return;
 
-      const numChars = 2 + Math.floor(Math.random() * 3); // 2-4 chars
+      const numChars = 2 + Math.floor(Math.random() * 3); 
       const chars = 'abcdefghijklmnopqrstuvwxyz';
 
-      // Type characters with human-like delays
       for (let i = 0; i < numChars; i++) {
         const ch = chars[Math.floor(Math.random() * chars.length)];
         await page.keyboard.type(ch, { delay: 80 + Math.random() * 120 });
         await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
       }
 
-      // Brief pause as if thinking
       await new Promise(r => setTimeout(r, 500 + Math.random() * 1000));
 
-      // Backspace everything
       for (let i = 0; i < numChars; i++) {
         await page.keyboard.press('Backspace');
         await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
       }
     };
 
-    // Initial typing to establish presence
     await new Promise(r => setTimeout(r, 3000));
     console.log(`${c('dim', `[${timestamp}]`)} ${c('cyan', '→')} Starting typing simulation in channel ${channel}...`);
     await simulateTyping();
     console.log(`${c('dim', `[${new Date().toISOString()}]`)} ${c('green', '●')} ONLINE`);
 
-    // Continuous loop — type, wait, repeat
     const refreshLoop = async () => {
       while (!isShuttingDown) {
         await new Promise(resolve => setTimeout(resolve, refreshIntervalSec * 1000));
@@ -2260,15 +2101,6 @@ async function cmdPresence(options: {
   }
 }
 
-// =========================================================================
-// API Server
-// =========================================================================
-// (moved to ./server/api-server.ts)
-
-// =========================================================================
-// Main CLI
-// =========================================================================
-
 const program = new Command();
 
 program
@@ -2296,13 +2128,11 @@ program
     } else if (opts.logLevel) {
       setLogLevel(opts.logLevel as LogLevel);
     }
-    // Handle browser selection
     if (opts.cookiePath) {
       setCustomCookiePath(opts.cookiePath);
     } else if (opts.browser) {
       setBrowser(opts.browser as BrowserType);
     }
-    // Handle profile selection
     if (opts.profile) {
       setProfile(opts.profile);
     }
@@ -2351,7 +2181,6 @@ program
   .option('--browser <type>', 'Browser type (chrome, brave, edge, chromium, arc)', 'chrome')
   .action((opts) => {
     try {
-      // Set browser first if specified
       if (opts.browser) {
         setBrowser(opts.browser as BrowserType);
       }
@@ -2479,7 +2308,6 @@ authCmd
   .option('--browser <type>', 'Browser type (chrome, brave, edge, chromium, arc)', 'chrome')
   .action((opts) => {
     try {
-      // Set browser first if specified
       if (opts.browser) {
         setBrowser(opts.browser as BrowserType);
       }
@@ -2619,7 +2447,6 @@ program
         writeFileSync(opts.output, cookieString);
         printSuccess(`Cookies exported to ${opts.output}`);
       } else {
-        // Output just the cookie string (for piping)
         console.log(cookieString);
       }
     } catch (e) {
@@ -2913,14 +2740,12 @@ program
     const quiet = opts.quiet || false;
     const timeCheckEnabled = opts.timeCheck !== false;
 
-    // Check if current time is within London business hours (9AM-6PM)
     const isWithinLondonBusinessHours = (): { inHours: boolean; londonTime: string; hour: number } => {
       const now = new Date();
-      // Get London time using Intl API
       const londonTime = now.toLocaleString('en-GB', { timeZone: 'Europe/London', hour12: false });
       const londonHourStr = now.toLocaleString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', hour12: false });
       const hour = parseInt(londonHourStr, 10);
-      const inHours = hour >= 9 && hour < 18; // 9AM to 6PM (18:00)
+      const inHours = hour >= 9 && hour < 18; 
       return { inHours, londonTime, hour };
     };
 
@@ -2943,7 +2768,6 @@ program
     let isActive = false;
     let currentTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // Handle graceful shutdown
     const shutdown = (reason?: string) => {
       if (currentTimer) clearTimeout(currentTimer);
       console.log(`\n${c('yellow', 'Shutting down...')}${reason ? ` (${reason})` : ''}`);
@@ -2952,7 +2776,6 @@ program
       process.exit(0);
     };
 
-    // Initialize client (lazy - only when needed)
     const ensureClient = async (): Promise<GoogleChatClient> => {
       if (!client) {
         client = await createClient(program.opts());
@@ -2965,10 +2788,8 @@ program
       const timestamp = new Date().toISOString();
       try {
         const c1 = await ensureClient();
-        // Force refresh auth to actually hit /mole/world and refresh session
         await c1.authenticate(true);
 
-        // Then hit spaces endpoint to verify session is working
         const spaces = await c1.listSpaces();
         if (!quiet) {
           console.log(`${c('dim', `[${timestamp}]`)} ${c('green', '✓')} Ping #${pingCount} OK - fetched ${spaces.length} spaces`);
@@ -2977,7 +2798,6 @@ program
         errorCount++;
         console.log(`${c('dim', `[${timestamp}]`)} ${c('red', '✗')} Ping #${pingCount} FAILED - ${(e as Error).message}`);
 
-        // If we get auth errors, try to re-authenticate
         if ((e as Error).message.includes('auth') || (e as Error).message.includes('401')) {
           console.log(`${c('yellow', '  → Attempting to re-authenticate...')}`);
           try {
@@ -2992,7 +2812,7 @@ program
     };
 
     const enterDormantMode = () => {
-      if (!isActive) return; // Already dormant
+      if (!isActive) return; 
       isActive = false;
       const timestamp = new Date().toISOString();
       const { londonTime, hour } = isWithinLondonBusinessHours();
@@ -3002,7 +2822,7 @@ program
     };
 
     const enterActiveMode = () => {
-      if (isActive) return; // Already active
+      if (isActive) return; 
       isActive = true;
       const timestamp = new Date().toISOString();
       const { londonTime } = isWithinLondonBusinessHours();
@@ -3011,12 +2831,10 @@ program
       console.log(`  Will ping every ${opts.interval} minutes`);
     };
 
-    // Main loop - handles both dormant and active states
     const scheduleNext = async () => {
       const { inHours, londonTime, hour } = isWithinLondonBusinessHours();
 
       if (!timeCheckEnabled || inHours) {
-        // Within business hours (or time check disabled) - active mode
         if (!isActive && timeCheckEnabled) {
           enterActiveMode();
         }
@@ -3024,17 +2842,13 @@ program
 
         await ping();
 
-        // Schedule next ping
         currentTimer = setTimeout(async () => {
           await scheduleNext();
         }, intervalMs);
       } else {
-        // Outside business hours - dormant mode
         if (isActive || pingCount === 0) {
-          // First time or transitioning from active
           enterDormantMode();
         } else {
-          // Still dormant, just log a check
           const timestamp = new Date().toISOString();
           if (!quiet) {
             console.log(`${c('dim', `[${timestamp}]`)} ${c('dim', '💤')} Still dormant - London time: ${londonTime} (hour: ${hour})`);
@@ -3042,14 +2856,12 @@ program
         }
         isActive = false;
 
-        // Schedule next dormant check
         currentTimer = setTimeout(async () => {
           await scheduleNext();
         }, dormantCheckMs);
       }
     };
 
-    // Start the loop
     await scheduleNext();
 
     process.on('SIGINT', () => shutdown());

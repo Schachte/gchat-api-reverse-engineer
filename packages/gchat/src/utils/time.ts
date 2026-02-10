@@ -1,19 +1,6 @@
-/**
- * Time helpers shared across higher-level utilities.
- */
 
-/**
- * Parse a time value to microseconds.
- *
- * Supports:
- * - microseconds (number/string)
- * - milliseconds, seconds
- * - ISO 8601 strings
- * - Relative time strings: "24h", "7d", "1w", "30m" (ago)
- */
 export function parseTimeToUsec(value: number | string): number | undefined {
   if (typeof value === 'number') {
-    // If < 10^10, assume seconds; if < 10^13, assume milliseconds; else microseconds
     if (value < 1e10) return value * 1_000_000;
     if (value < 1e13) return value * 1_000;
     return value;
@@ -23,12 +10,10 @@ export function parseTimeToUsec(value: number | string): number | undefined {
     const trimmed = value.trim();
     if (!trimmed) return undefined;
 
-    // Try parsing as number first
     if (/^\d+$/.test(trimmed)) {
       return parseTimeToUsec(parseInt(trimmed, 10));
     }
 
-    // Relative time (e.g., "24h", "7d", "1w", "30m")
     const relativeMatch = trimmed.match(/^(\d+)(m|h|d|w)$/i);
     if (relativeMatch) {
       const amount = parseInt(relativeMatch[1], 10);
@@ -44,7 +29,6 @@ export function parseTimeToUsec(value: number | string): number | undefined {
       return (now - msAgo) * 1000;
     }
 
-    // ISO 8601 date
     const date = new Date(trimmed);
     if (!Number.isNaN(date.getTime())) {
       return date.getTime() * 1000;
